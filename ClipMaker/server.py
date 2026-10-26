@@ -771,6 +771,42 @@ def open_window(url):
     webbrowser.open(url)
 
 
+def focus_window():
+    """If a ClipMaker window is already open, bring it to the front instead of opening another one."""
+    if os.name != "nt":
+        return False
+    import ctypes
+    from ctypes import wintypes
+    u = ctypes.windll.user32
+    found = []
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def each(hwnd, _):
+        if not u.IsWindowVisible(hwnd):
+            return True
+        title = ctypes.create_unicode_buffer(256)
+        u.GetWindowTextW(hwnd, title, 256)
+        cls = ctypes.create_unicode_buffer(256)
+        u.GetClassNameW(hwnd, cls, 256)
+        if title.value.startswith("ClipMaker") and cls.value.startswith("Chrome_WidgetWin"):
+            found.append(hwnd)
+            return False
+        return True
+
+    u.EnumWindows(each, 0)
+    if not found:
+        return False
+    hwnd = found[0]
+    if u.IsIconic(hwnd):
+        u.ShowWindow(hwnd, 9)          # restore if minimized
+    else:
+        u.ShowWindow(hwnd, 5)
+    u.keybd_event(0x12, 0, 0, 0)       # tap Alt so Windows lets us bring it forward
+    u.keybd_event(0x12, 0, 2, 0)
+    u.SetForegroundWindow(hwnd)
+    return True
+
+
 def already_running():
     with socket.socket() as sk:
         sk.settimeout(0.5)
@@ -790,7 +826,12 @@ if __name__ == "__main__":
     logging.getLogger("asyncio").addFilter(_QuietResets())
     url = f"http://127.0.0.1:{PORT}"
     if "--open" in sys.argv or already_running():
-        open_window(url)
+        try:
+            focused = focus_window()
+        except Exception:
+            focused = False
+        if not focused:
+            open_window(url)
         raise SystemExit(0)
     shutil.rmtree(WORK, ignore_errors=True)
     WORK.mkdir(exist_ok=True)
