@@ -1,0 +1,1567 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ClipMaker</title>
+<style>
+/* Layout: control-room split. Source monitor + controls left, phone-shaped 9:16 output monitor right */
+:root {
+  --bg: #f3f2f7; --panel: #ffffff; --sunk: #e8e6ef; --line: #d6d3e0; --fg: #17151f; --muted: #625e72;
+  --accent: #e5306f; --accent-fg: #ffffff; --game: #0a8fb0; --ok: #138a4d; --warn: #b26a00;
+  --display: "Segoe UI Black", "Arial Black", system-ui, sans-serif;
+  --body: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: Consolas, ui-monospace, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #0f0e14; --panel: #18161f; --sunk: #221f2c; --line: #312d3e; --fg: #f1eff7; --muted: #a29db3;
+  --accent: #ff4d8d; --accent-fg: #1a0610; --game: #3cc8ea; --ok: #45d08a; --warn: #f0a93a; color-scheme: dark } }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 var(--body); padding: 16px 18px 40px; }
+.wrap { max-width: 1320px; margin: 0 auto; display: grid; gap: 16px; }
+header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.logo { font: 900 26px var(--display); letter-spacing: -0.01em; display: flex; align-items: center; gap: 10px; }
+.rec { width: 13px; height: 13px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent); }
+.rec.live { animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .25; } }
+.topnav { display: flex; gap: 6px; margin-left: auto; }
+.topnav button[aria-selected=true] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+@media (max-width: 980px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.col { display: grid; gap: 16px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 12px; min-width: 0; }
+h2 { font: 900 17px var(--display); margin: 0; }
+.label { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.muted { color: var(--muted); font-size: 13.5px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.grow { flex: 1; min-width: 160px; }
+button { font: 600 14px var(--body); border-radius: 8px; border: 1px solid var(--line); background: var(--sunk); color: var(--fg); padding: 9px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+button:hover { border-color: var(--muted); }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+button.big { font-size: 16px; padding: 13px 18px; width: 100%; justify-content: center; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+input[type=text], input[type=number], select, textarea { font: 15px var(--body); background: var(--sunk); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; min-width: 0; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+input[type=color] { width: 44px; height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--sunk); padding: 2px; }
+.drop { border: 2px dashed var(--line); border-radius: var(--r); padding: 16px; text-align: center; cursor: pointer; display: grid; gap: 4px; }
+.drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.drop strong { font: 900 17px var(--display); }
+.clips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { font: 600 13px var(--body); padding: 6px 6px 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--sunk); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; max-width: 280px; }
+.chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip[aria-pressed=true] { border-color: var(--accent); color: var(--accent); }
+.chip b { font-weight: 700; padding: 0 6px; border-radius: 99px; opacity: .6; }
+.chip b:hover { opacity: 1; background: var(--line); }
+.monitor { position: relative; width: 100%; background: #000; border-radius: 8px; overflow: hidden; }
+.monitor video { display: block; width: 100%; max-height: 62vh; background: #000; }
+.ov { position: absolute; left: 0; top: 0; pointer-events: none; }
+.box { position: absolute; border: 3px solid var(--accent); border-radius: 4px; pointer-events: none; }
+.box .tagl { pointer-events: auto; cursor: move; touch-action: none; user-select: none; position: absolute; left: -3px; top: -24px; background: var(--accent); color: var(--accent-fg); font: 700 11px var(--body); letter-spacing: .05em; text-transform: uppercase; padding: 3px 7px; border-radius: 4px 4px 0 0; white-space: nowrap; }
+.box .handle { pointer-events: auto; touch-action: none; position: absolute; width: 18px; height: 18px; background: var(--accent); border: 2px solid #fff; border-radius: 50%; }
+.box .h-br { right: -10px; bottom: -10px; cursor: nwse-resize; }
+.box .h-tl { left: -10px; top: -10px; cursor: nwse-resize; }
+.facedot { position: absolute; width: 20px; height: 20px; margin: -10px 0 0 -10px; border: 2px solid #fff; border-radius: 50%; background: color-mix(in srgb, var(--accent) 70%, transparent); cursor: grab; pointer-events: auto; touch-action: none; }
+.gamebox { position: absolute; border: 2px dashed var(--game); border-radius: 3px; }
+.gamebox span { position: absolute; right: 4px; top: 4px; background: var(--game); color: #00141a; font: 700 11px var(--body); letter-spacing: .05em; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; }
+.timeline { position: relative; height: 10px; background: var(--sunk); border-radius: 99px; }
+.timeline .sel { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 99px; }
+.timeline .ph { position: absolute; top: -3px; width: 3px; height: 16px; background: var(--fg); border-radius: 2px; }
+.time { font: 500 13px var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.tabs button { background: none; border: none; border-bottom: 3px solid transparent; border-radius: 0; padding: 10px 12px; color: var(--muted); }
+.tabs button[aria-selected=true] { color: var(--fg); border-bottom-color: var(--accent); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px 22px; }
+.field { display: grid; gap: 6px; min-width: 0; align-content: start; }
+.field .top { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; font-size: 14px; }
+.field .top output { font: 500 13px var(--mono); color: var(--muted); }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button { padding: 7px 11px; font-size: 13px; }
+.seg button[aria-pressed=true] { border-color: var(--accent); color: var(--accent); }
+.check { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+.caplist { display: grid; gap: 6px; max-height: 320px; overflow: auto; padding-right: 4px; }
+.cap { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; align-items: center; }
+.cap .t { font: 12.5px var(--mono); color: var(--muted); cursor: pointer; text-align: right; }
+.cap.now input { border-color: var(--accent); }
+.empty { border: 1px dashed var(--line); border-radius: 8px; padding: 14px; color: var(--muted); font-size: 14px; }
+.note { border-left: 3px solid var(--warn); padding: 8px 12px; background: color-mix(in srgb, var(--warn) 10%, transparent); border-radius: 0 6px 6px 0; font-size: 14px; }
+.note.ok { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.status { font-size: 14px; min-height: 20px; }
+.out { position: sticky; top: 12px; }
+.phone { width: 100%; max-width: 300px; margin: 0 auto; aspect-ratio: 9 / 16; background: #000; border-radius: 22px; padding: 8px; border: 1px solid var(--line); }
+.phone canvas { width: 100%; height: 100%; display: block; border-radius: 15px; }
+.pctl { display: flex; gap: 10px; align-items: center; }
+.pctl button { padding: 8px 14px; font-size: 16px; }
+.pctl input { flex: 1; }
+.phone canvas { cursor: pointer; }
+.bar { height: 8px; border-radius: 99px; background: var(--sunk); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s linear; }
+.results { display: grid; gap: 8px; max-height: 520px; overflow: auto; }
+.result.sel { border-color: var(--accent); }
+.ggrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; max-height: 360px; overflow: auto; }
+.gitem { position: relative; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; cursor: pointer; padding: 0; height: 100px; background: var(--sunk); }
+.gitem.stk { background: repeating-conic-gradient(var(--sunk) 0 25%, var(--panel) 0 50%) 50% / 16px 16px; }
+.gitem img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gitem.stk img { object-fit: contain; }
+.gitem:hover, .gitem:focus-visible { border-color: var(--accent); }
+.gitem .ok { position: absolute; inset: auto 4px 4px auto; background: var(--accent); color: var(--accent-fg); font: 700 11px var(--body); padding: 2px 6px; border-radius: 4px; }
+.gsearch { border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 10px; }
+.libgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.libitem { border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: grid; gap: 6px; background: var(--panel); min-width: 0; }
+.libitem .nm { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.libitem .thumb { height: 64px; border-radius: 6px; background: var(--sunk); display: grid; place-items: center; overflow: hidden; font-size: 26px; }
+.libitem .thumb img, .libitem .thumb video { width: 100%; height: 100%; object-fit: cover; }
+.libitem .row { gap: 4px; }
+.libitem button { padding: 5px 8px; font-size: 12.5px; }
+.fxlist, .pieces { display: grid; gap: 6px; }
+.fx, .piece { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+.fx .t, .piece .t { font: 12.5px var(--mono); color: var(--muted); cursor: pointer; }
+.fx .mid, .piece .mid { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; min-width: 0; }
+.fx select, .fx input { width: auto; padding: 4px 6px; font-size: 13px; }
+.fx button, .piece button { padding: 4px 8px; font-size: 13px; }
+.piece .n { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* AI dock */
+.aibtn { position: fixed; right: 18px; bottom: 18px; z-index: 30; border-radius: 999px; padding: 12px 18px; font-size: 15px; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+.aipanel { position: fixed; right: 18px; bottom: 74px; z-index: 30; width: min(420px, calc(100vw - 36px)); height: min(560px, calc(100vh - 110px)); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 14px 40px rgba(0,0,0,.25); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }
+.aihead { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.aimsgs { overflow: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.msg { max-width: 88%; padding: 9px 12px; border-radius: 12px; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg.me { align-self: flex-end; background: var(--accent); color: var(--accent-fg); border-bottom-right-radius: 4px; }
+.msg.bot { align-self: flex-start; background: var(--sunk); border-bottom-left-radius: 4px; }
+.msg.did { align-self: flex-start; font-size: 12.5px; color: var(--muted); padding: 0 4px; }
+.aiform { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--line); }
+.aiform textarea { min-height: 42px; max-height: 120px; resize: none; }
+.chips2 { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips2 button { font-size: 12.5px; padding: 6px 10px; border-radius: 999px; }
+.acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.acts button, .acts a.btn { padding: 6px 10px; font-size: 13px; }
+a.btn { font: 600 14px var(--body); border-radius: 8px; border: 1px solid var(--line); background: var(--sunk); color: var(--fg); padding: 9px 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+a.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+button.danger { color: #c62828; }
+button.danger.sure { background: #c62828; border-color: #c62828; color: #fff; }
+.result { display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: 10px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 6px; cursor: pointer; }
+.result video { width: 60px; aspect-ratio: 9/16; object-fit: cover; border-radius: 5px; background: #000; }
+.result .n { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player { width: 100%; max-height: 70vh; aspect-ratio: 9/16; background: #000; border-radius: 10px; }
+.log { font: 13px/1.5 var(--mono); background: var(--sunk); border-radius: 8px; padding: 10px 12px; max-height: 320px; overflow: auto; white-space: pre-wrap; }
+.pill { font: 700 12px var(--body); padding: 4px 10px; border-radius: 99px; background: var(--sunk); }
+.pill.on { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.setupbg { position: fixed; inset: 0; background: rgb(0 0 0 / .55); display: grid; place-items: center; z-index: 80; padding: 16px; }
+.setupbg[hidden] { display: none; }
+.setup { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; width: min(560px, 100%); max-height: 92vh; overflow: auto; padding: 22px; display: grid; gap: 12px; box-shadow: 0 20px 60px rgb(0 0 0 / .35); }
+.setup h2 { font: 900 24px var(--display); margin: 0; }
+.setup .dots { display: flex; gap: 6px; } .setup .dots i { height: 6px; flex: 1; border-radius: 3px; background: var(--sunk); } .setup .dots i.on { background: var(--accent); }
+.setup ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.twcode { font: 900 34px var(--mono); letter-spacing: 6px; text-align: center; background: var(--sunk); border-radius: 10px; padding: 12px; user-select: all; }
+.twbtn { background: #9146ff !important; color: #fff !important; border-color: #9146ff !important; font-weight: 700; }
+.setup .navrow { display: flex; gap: 8px; justify-content: space-between; align-items: center; margin-top: 4px; }
+.kbd { font: 500 12px var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; }
+</style>
+</head>
+<body>
+<div class="setupbg" id="setupBg" hidden>
+  <div class="setup" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
+    <div class="dots" id="setupDots"></div>
+    <div id="setupBody"></div>
+    <div class="navrow"><button type="button" id="setupBack">← Back</button><span class="muted" id="setupStep"></span><button type="button" class="primary" id="setupNext">Next →</button></div>
+  </div>
+</div>
+<div class="wrap">
+  <div class="note" id="updBar" hidden style="display:flex;gap:10px;align-items:center;justify-content:space-between"><span id="updText">🎉 A new version of ClipMaker is ready.</span><button type="button" class="primary" id="updBtn">Update now</button></div>
+  <header>
+    <div class="logo"><span class="rec" id="recDot"></span>ClipMaker</div>
+    <div class="muted">Stream clip in. 1080×1920 TikTok / Reels / Shorts video out.</div>
+    <nav class="topnav">
+      <button type="button" data-view="make" aria-selected="true">Make clips</button>
+      <button type="button" data-view="twitch" aria-selected="false">Auto from Twitch</button>
+      <button type="button" data-view="done" aria-selected="false">Finished clips</button>
+      <button type="button" id="setupBtn" title="Step-by-step setup">⚙ Setup</button>
+    </nav>
+  </header>
+
+  <!-- ===================== MAKE ===================== -->
+  <div class="main" data-v="make">
+    <div class="col">
+      <section class="panel">
+        <label class="drop" id="drop" for="fileIn">
+          <strong>Drop your clips here</strong>
+          <span class="muted">or click to pick files</span>
+        </label>
+        <input type="file" id="fileIn" accept="video/*" multiple hidden>
+        <div class="row">
+          <input type="text" id="linkIn" class="grow" placeholder="Or paste a clip link (Twitch, YouTube, TikTok…) and press Get clip">
+          <button type="button" id="linkBtn">Get clip</button>
+        </div>
+        <div class="row">
+          <input type="text" id="folderIn" class="grow" placeholder="Or paste a folder path, like C:\Users\you\Videos\Clips">
+          <button type="button" id="folderBtn">Add folder</button>
+        </div>
+        <div class="status" id="addStatus" role="status"></div>
+        <div class="clips" id="clips"></div>
+      </section>
+
+      <section class="panel" id="editor" hidden>
+        <div class="row" style="justify-content:space-between">
+          <h2 id="srcTitle">Clip</h2>
+          <div class="row">
+            <button type="button" id="findBtn">Find my webcam again</button>
+          </div>
+        </div>
+        <div class="monitor" id="monitor">
+          <video id="vid" controls preload="auto" playsinline></video>
+          <div class="ov" id="ov">
+            <div class="gamebox" id="gameBox"><span>Gameplay</span></div>
+            <div class="box" id="camBox" tabindex="0" aria-label="Webcam area"><span class="tagl">✥ Webcam</span><span class="handle h-tl" data-h="tl"></span><span class="handle h-br" data-h="br"></span></div>
+            <div class="facedot" id="faceDot" title="Center of your face"></div>
+          </div>
+        </div>
+        <p class="muted" style="margin:0">The pink box is your webcam: everything inside it goes on top. Drag the <b>✥ Webcam</b> tag to move it, drag a corner dot to resize, and drag the round dot onto your face. The dashed blue box is the gameplay that shows below.</p>
+        <div class="status" id="findStatus" role="status"></div>
+
+        <div class="label">Trim</div>
+        <div class="timeline" id="timeline"><div class="sel" id="tlSel"></div><div class="ph" id="tlPh"></div></div>
+        <div class="row">
+          <button type="button" id="setStart">Start here</button>
+          <button type="button" id="setEnd">End here</button>
+          <button type="button" id="clearTrim">Keep whole clip</button>
+          <span class="time" id="trimLabel"></span>
+          <button type="button" id="playSel" style="margin-left:auto">▶ Play trimmed part</button>
+        </div>
+        <p class="muted" style="margin:0">Play or drag the video to the moment you want, then press <b>Start here</b>. Do the same for <b>End here</b>.</p>
+
+        <div class="label" style="margin-top:6px">Combine clips</div>
+        <p class="muted" style="margin:0">Mark a part with Start here / End here, press <b>+ Add this part</b>, then switch clips and add more. <b>Make combined clip</b> joins them in order into a new clip. Or just ask the ✨ AI.</p>
+        <div class="row">
+          <button type="button" id="addPiece">+ Add this part</button>
+          <button type="button" class="primary" id="makeCombined" disabled>Make combined clip</button>
+          <span class="time" id="piecesTotal"></span>
+        </div>
+        <div class="pieces" id="pieces"></div>
+      </section>
+
+      <section class="panel" id="settingsPanel">
+        <div class="tabs" role="tablist">
+          <button role="tab" aria-selected="true" data-tab="layout" type="button">Layout</button>
+          <button role="tab" aria-selected="false" data-tab="subs" type="button">Subtitles</button>
+          <button role="tab" aria-selected="false" data-tab="style" type="button">Subtitle style</button>
+          <button role="tab" aria-selected="false" data-tab="fx" type="button">😂 Sounds &amp; memes</button>
+          <button role="tab" aria-selected="false" data-tab="extras" type="button">Extras</button>
+        </div>
+
+        <div data-pane="layout" class="grid2">
+          <div class="field">
+            <div class="top"><span>Webcam</span></div>
+            <div class="seg" id="camMode">
+              <button type="button" data-v="on" aria-pressed="true">On top</button>
+              <button type="button" data-v="off" aria-pressed="false">No webcam</button>
+            </div>
+          </div>
+          <div class="field">
+            <div class="top"><label for="cam_pct">Webcam height</label><output id="cam_pctO"></output></div>
+            <input type="range" id="cam_pct" min="25" max="50" step="1">
+          </div>
+          <div class="field">
+            <div class="top"><label for="cam_zoom">Webcam zoom</label><output id="cam_zoomO"></output></div>
+            <input type="range" id="cam_zoom" min="1" max="2.5" step="0.05">
+            <span class="muted">1.00× shows your whole webcam.</span>
+          </div>
+          <div class="field">
+            <div class="top"><label for="game_zoom">Gameplay zoom</label><output id="game_zoomO"></output></div>
+            <input type="range" id="game_zoom" min="0" max="200" step="5">
+            <span class="muted">0 shows the whole screen. 100 fills the space. Past 100 zooms in closer (up to 2.5×).</span>
+          </div>
+          <div class="field">
+            <div class="top"><label for="game_off">Gameplay left / right</label><output id="game_offO"></output></div>
+            <input type="range" id="game_off" min="-100" max="100" step="5">
+          </div>
+          <div class="field">
+            <div class="top"><label for="game_off_y">Gameplay up / down</label><output id="game_off_yO"></output></div>
+            <input type="range" id="game_off_y" min="-100" max="100" step="5">
+            <span class="muted">Works when you're zoomed in past 100.</span>
+          </div>
+          <div class="field">
+            <label class="check"><input type="checkbox" id="hide_cam"> Cut the webcam out of the gameplay</label>
+            <label class="check"><input type="checkbox" id="sameAll" checked> Use this webcam spot for every clip</label>
+          </div>
+        </div>
+
+        <div data-pane="subs" hidden style="display:grid;gap:12px">
+          <label class="check"><input type="checkbox" id="subs"> Add subtitles</label>
+          <div class="row">
+            <button type="button" id="writeSubs">Redo subtitles</button>
+            <select id="model" style="width:auto" aria-label="Accuracy">
+              <option value="base">Fast</option><option value="small">Good (recommended)</option><option value="medium">Best (slow)</option>
+            </select>
+            <select id="lang" style="width:auto" aria-label="Language">
+              <option value="Auto">Any language</option><option value="en">English</option><option value="es">Spanish</option><option value="fr">French</option><option value="pt">Portuguese</option><option value="ht">Haitian Creole</option>
+            </select>
+          </div>
+          <div class="status" id="subsStatus" role="status"></div>
+          <p class="muted" style="margin:0">Subtitles are written automatically when you add a clip. Every line below is a text box: click it, fix the word, and you're done. Changed the language or accuracy? Press <b>Redo subtitles</b>.</p>
+          <div class="caplist" id="caplist"></div>
+        </div>
+
+        <div data-pane="style" hidden class="grid2">
+          <div class="field">
+            <div class="top"><label for="per_chunk">Words on screen</label><output id="per_chunkO"></output></div>
+            <input type="range" id="per_chunk" min="1" max="5" step="1">
+          </div>
+          <div class="field">
+            <div class="top"><label for="font_size">Text size</label><output id="font_sizeO"></output></div>
+            <input type="range" id="font_size" min="56" max="140" step="2">
+          </div>
+          <div class="field">
+            <div class="top"><span>Position</span></div>
+            <div class="seg" id="spot">
+              <button type="button" data-v="seam">Between cam &amp; game</button>
+              <button type="button" data-v="low">On gameplay</button>
+              <button type="button" data-v="cam">On webcam</button>
+            </div>
+          </div>
+          <div class="field">
+            <div class="top"><span>Font</span></div>
+            <div class="seg" id="font">
+              <button type="button" data-v="Arial Black">Bold</button>
+              <button type="button" data-v="Impact">Tall</button>
+              <button type="button" data-v="Segoe UI Black">Clean</button>
+              <button type="button" data-v="Comic Sans MS">Fun</button>
+            </div>
+          </div>
+          <div class="field">
+            <div class="top"><label for="color">Highlight color</label></div>
+            <div class="row"><input type="color" id="color"><label class="check"><input type="checkbox" id="upper"> ALL CAPS</label></div>
+          </div>
+        </div>
+
+        <div data-pane="fx" hidden style="display:grid;gap:12px">
+          <p class="muted" style="margin:0">Play your clip to the funny moment, then press <b>+ Add here</b> on a sound, meme clip or picture. It plays right at that moment in your video.</p>
+          <div class="gsearch">
+            <div class="row" style="justify-content:space-between"><div class="label">🔎 Find GIFs &amp; stickers</div><span class="muted" style="font-size:12px">Powered by GIPHY</span></div>
+            <div id="gKeyBox" hidden style="display:grid;gap:8px">
+              <p class="muted" style="margin:0">One-time setup (free, about 1 minute):<br>1. Go to <a href="https://developers.giphy.com/dashboard/" target="_blank" rel="noopener">developers.giphy.com</a> and sign up or log in.<br>2. Click <b>Create an API Key</b>, pick <b>API</b>, and give it any name (like ClipMaker).<br>3. Copy the key and paste it here.</p>
+              <div class="row"><input type="text" id="gKey" class="grow" placeholder="Paste your GIPHY key"><button type="button" id="gKeySave" class="primary">Save</button></div>
+            </div>
+            <div id="gSearchBox" hidden style="display:grid;gap:8px">
+              <div class="row">
+                <input type="text" id="gQ" class="grow" placeholder="Search: shocked, bruh, mind blown, crying laughing…">
+                <div class="seg" id="gKind"><button type="button" data-v="gifs" aria-pressed="true">GIFs</button><button type="button" data-v="stickers" aria-pressed="false">Stickers</button></div>
+                <button type="button" id="gGo" class="primary">Search</button>
+              </div>
+              <div class="status" id="gStatus"></div>
+              <div class="ggrid" id="gGrid"></div>
+              <div class="row" style="justify-content:space-between"><button type="button" id="gMore" hidden>Show more</button><a href="#" id="gChangeKey" class="muted" style="font-size:12px">Change GIPHY key</a></div>
+            </div>
+          </div>
+          <div class="label">On this clip</div>
+          <div class="fxlist" id="fxlist"></div>
+          <div class="row" style="justify-content:space-between">
+            <div class="label">Your sounds &amp; memes</div>
+            <label class="btn" for="libIn" style="cursor:pointer">+ Add files</label>
+          </div>
+          <input type="file" id="libIn" multiple accept="audio/*,image/*,video/*,.gif" hidden>
+          <div class="drop" id="libDrop" style="padding:10px"><span class="muted">Drop mp3 / wav sounds, gif / mp4 meme clips, or png / jpg pictures here</span></div>
+          <div class="libgrid" id="libgrid"></div>
+        </div>
+
+        <div data-pane="extras" hidden class="grid2">
+          <div class="field">
+            <div class="top"><label for="hook">Hook text at the top</label></div>
+            <input type="text" id="hook" placeholder="He did NOT see that coming 💀">
+            <div class="top"><label for="hook_secs">Show it for</label><output id="hook_secsO"></output></div>
+            <input type="range" id="hook_secs" min="1" max="10" step="0.5">
+          </div>
+          <div class="field">
+            <div class="top"><span>Speed</span></div>
+            <div class="seg" id="speed">
+              <button type="button" data-v="1">1×</button><button type="button" data-v="1.1">1.1×</button>
+              <button type="button" data-v="1.25">1.25×</button><button type="button" data-v="1.5">1.5×</button>
+            </div>
+            <div class="top"><label for="volume">Volume</label><output id="volumeO"></output></div>
+            <input type="range" id="volume" min="50" max="200" step="10">
+          </div>
+          <div class="field">
+            <label class="check"><input type="checkbox" id="vivid"> Vivid colors (makes the game pop)</label>
+            <label class="check"><input type="checkbox" id="fades"> Smooth fade in and out</label>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="panel out">
+      <div class="row" style="justify-content:space-between"><h2>Preview</h2><span class="label">1080 × 1920</span></div>
+      <div class="phone"><canvas id="out" width="540" height="960" title="Click to play or pause"></canvas></div>
+      <div class="pctl">
+        <button type="button" id="pPlay" aria-label="Play">▶</button>
+        <input type="range" id="pSeek" min="0" max="1000" value="0" aria-label="Preview position">
+        <span class="time" id="pTime">0:00.0</span>
+      </div>
+      <div class="muted" id="previewSubsNote" style="text-align:center;min-height:18px"></div>
+      <button type="button" class="primary big" id="renderBtn" disabled>Make this clip</button>
+      <button type="button" id="renderAll" style="justify-content:center" disabled>Make all clips</button>
+      <div class="bar" aria-hidden="true"><i id="prog"></i></div>
+      <div class="status" id="renderStatus" role="status">Add a clip to get started.</div>
+    </aside>
+  </div>
+
+  <!-- ===================== TWITCH ===================== -->
+  <div class="main" data-v="twitch" hidden>
+    <div class="col">
+      <section class="panel">
+        <div class="row" style="justify-content:space-between"><h2>Auto from Twitch</h2><span class="pill" id="twPill">Not watching</span></div>
+        <p class="muted" style="margin:0">Clip with your Stream Deck like normal. When you end stream, every clip from that stream is made vertical with your saved layout and lands in <b>Finished clips</b>.</p>
+        <div class="row" id="twAcct"></div>
+        <details id="twAdv">
+          <summary class="muted">Advanced: use your own Twitch developer keys instead</summary>
+          <div class="grid2" style="margin-top:8px">
+            <div class="field"><label class="top" for="twLogin">Twitch username</label><input type="text" id="twLogin"></div>
+            <div class="field"><label class="top" for="twId">Client ID</label><input type="text" id="twId"></div>
+            <div class="field"><label class="top" for="twSecret">Client Secret</label><input type="text" id="twSecret" placeholder="Paste to change it"><span class="muted" id="twSecretNote"></span></div>
+          </div>
+        </details>
+        <div class="grid2">
+          <div class="field">
+            <div class="top"><span>Make clips</span></div>
+            <div class="seg" id="twMode">
+              <button type="button" data-v="after">When I end stream</button>
+              <button type="button" data-v="during">While I stream</button>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <button type="button" class="primary" id="twStart">▶ Start watching</button>
+          <span class="grow"></span>
+          <input type="number" id="twHours" value="12" min="1" max="168" style="width:90px" aria-label="Hours back">
+          <button type="button" id="twGrab">Make clips from the last few hours</button>
+        </div>
+        <div class="status" id="twStatus" role="status"></div>
+        <p class="muted" style="margin:0">Clips from your stream show up in <b>Make clips</b> (marked 🟣) with your webcam found and subtitles written. Check them, add sounds or GIFs, then press <b>Make this clip</b>.</p>
+        <label class="check"><input type="checkbox" id="twAutoRender"> Skip editing: make finished clips automatically</label>
+        <div class="label">What it's doing</div>
+        <div class="log" id="twLog">Not watching yet.</div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ===================== FINISHED ===================== -->
+  <div class="main" data-v="done" hidden>
+    <div class="col">
+      <section class="panel">
+        <div class="row" style="justify-content:space-between">
+          <h2>Finished clips</h2>
+          <button type="button" id="openFolder" title="Where ClipMaker keeps your finished clips">Open the clips folder</button>
+        </div>
+        <div class="results" id="results"></div>
+      </section>
+    </div>
+    <aside class="panel out">
+      <h2 id="playName">Pick a clip</h2>
+      <video class="player" id="player" controls playsinline></video>
+      <div class="acts" id="playActs" hidden>
+        <button type="button" class="primary" id="playDl">⬇ Download</button>
+        <button type="button" class="danger" id="playDel" data-label="🗑 Remove">🗑 Remove</button>
+        <button type="button" class="danger" id="playDelAll" data-label="🗑 Delete everywhere">🗑 Delete everywhere</button>
+      </div>
+      <div class="status" id="doneStatus" role="status"></div>
+      <p class="muted" style="margin:0"><b>⬇ Download</b> saves a copy to your Downloads folder, ready to post.<br><b>🗑 Remove</b> clears the clip out of ClipMaker but keeps your downloaded copy.<br><b>🗑 Delete everywhere</b> removes it from ClipMaker <i>and</i> your Downloads (it goes to the Recycle Bin).</p>
+    </aside>
+  </div>
+</div>
+
+<button type="button" class="primary aibtn" id="aiBtn">✨ Ask AI</button>
+<section class="aipanel" id="aiPanel" hidden aria-label="AI helper">
+  <div class="aihead"><h2>✨ AI helper</h2><button type="button" id="aiClose" aria-label="Close">✕</button></div>
+  <div class="aimsgs" id="aiMsgs"></div>
+  <form class="aiform" id="aiForm">
+    <textarea id="aiIn" placeholder="e.g. combine clip 1 from 0-5 and clip 2 for 3 seconds" rows="1"></textarea>
+    <button type="submit" class="primary" id="aiSend">Send</button>
+  </form>
+</section>
+
+<script>
+(() => {
+"use strict";
+const OW = 1080, OH = 1920;
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const even = (v) => { v = Math.round(v); return Math.max(2, v - (v % 2)); };
+const fmt = (t) => { t = Math.max(0, t || 0); const m = Math.floor(t / 60), s = t - m * 60; return m + ":" + s.toFixed(1).padStart(4, "0"); };
+async function api(path, body, method) {
+  const r = await fetch(path, { method: method || (body === undefined ? "GET" : "POST"), headers: body instanceof FormData ? {} : { "Content-Type": "application/json" }, body: body instanceof FormData ? body : body === undefined ? undefined : JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "Something went wrong (" + r.status + ")");
+  return j;
+}
+
+// ---------------- state ----------------
+const S = { cam_on: true, cam_pct: 36, cam_zoom: 1, game_zoom: 45, game_off: 0, game_off_y: 0, hide_cam: true,
+  subs: true, model: "small", lang: "Auto", per_chunk: 3, spot: "seam", upper: true, color: "#ffd400",
+  font_size: 88, font: "Arial Black", hook: "", hook_secs: 3, speed: 1, volume: 100, vivid: false, fades: true };
+const clips = [];   // {id,name,w,h,dur, cam, face, a, b, words}
+let cur = null, busy = false;
+const vid = $("vid");
+
+// ---------------- views ----------------
+document.querySelectorAll("[data-view]").forEach((b) => b.onclick = () => {
+  document.querySelectorAll("[data-view]").forEach((x) => x.setAttribute("aria-selected", x === b));
+  document.querySelectorAll("[data-v]").forEach((v) => v.hidden = v.dataset.v !== b.dataset.view);
+  if (b.dataset.view === "done") loadResults();
+  if (b.dataset.view === "make") requestAnimationFrame(syncBoxes);
+});
+document.querySelectorAll("[role=tab]").forEach((t) => t.onclick = () => {
+  document.querySelectorAll("[role=tab]").forEach((x) => x.setAttribute("aria-selected", x === t));
+  document.querySelectorAll("[data-pane]").forEach((p) => p.hidden = p.dataset.pane !== t.dataset.tab);
+});
+
+// ---------------- layout math (same as engine.plan) ----------------
+function plan(c) {
+  const W = c.w, H = c.h, camOn = S.cam_on && !!c.cam;
+  const faceH = camOn ? even(OH * S.cam_pct / 100) : 0, gameH = OH - faceH;
+  const p = { faceH, gameH, face: null };
+  if (camOn) {
+    const rx = c.cam.x * W, ry = c.cam.y * H, rw = c.cam.w * W, rh = c.cam.h * H, A = OW / faceH;
+    let cw, ch;
+    if (rw / rh > A) { ch = rh; cw = ch * A; } else { cw = rw; ch = cw / A; }
+    const z = Math.max(1, S.cam_zoom); cw /= z; ch /= z;
+    const fx = c.face ? c.face.x * W : rx + rw / 2, fy = c.face ? c.face.y * H : ry + rh / 2;
+    p.face = { x: clamp(fx - cw / 2, rx, rx + rw - cw), y: clamp(fy - ch / 2, ry, ry + rh - ch), w: cw, h: ch };
+  }
+  const GA = OW / gameH, fillW = Math.min(W, H * GA), t = clamp(S.game_zoom / 100, 0, 1);
+  let gw = W - t * (W - fillW);
+  if (S.game_zoom > 100) gw = fillW / (1 + (Math.min(S.game_zoom, 200) - 100) / 100 * 1.5);
+  const gh = Math.min(H, gw / GA);
+  const gcx = W / 2 + (S.game_off / 100) * (W - gw) / 2;
+  const gcy = H / 2 + ((S.game_off_y || 0) / 100) * (H - gh) / 2;
+  p.game = { x: clamp(gcx - gw / 2, 0, W - gw), y: clamp(gcy - gh / 2, 0, H - gh), w: gw, h: gh };
+  p.dispH = Math.min(gameH, OW * gh / gw);
+  return p;
+}
+
+// ---------------- preview canvas ----------------
+const out = $("out"), og = out.getContext("2d");
+// Light-weight preview: work on a small copy of the frame and blur by shrinking, so playback stays smooth.
+const small = document.createElement("canvas"), sg = small.getContext("2d");
+const tiny = document.createElement("canvas"), tg = tiny.getContext("2d");
+const SMW = 480;
+function smallFrame(c) {
+  const h = Math.round(SMW * c.h / c.w);
+  if (small.width !== SMW || small.height !== h) { small.width = SMW; small.height = h; }
+  sg.drawImage(vid, 0, 0, SMW, h);
+  return SMW / c.w;
+}
+function blurInto(g, src, sx, sy, sw, sh, dx, dy, dw, dh, amount) {
+  // shrink then stretch = cheap blur
+  const tw = Math.max(2, Math.round(sw / amount)), th = Math.max(2, Math.round(sh / amount));
+  tiny.width = tw; tiny.height = th;
+  tg.imageSmoothingEnabled = true; tg.drawImage(src, sx, sy, sw, sh, 0, 0, tw, th);
+  g.imageSmoothingEnabled = true; g.drawImage(tiny, 0, 0, tw, th, dx, dy, dw, dh);
+}
+function hidePatch(g, c, p, k) {
+  // paint over where the webcam sits inside the gameplay, using the game right next to it (mirrored + blurred)
+  const W = c.w, H = c.h, pad = Math.min(W, H) * 0.008;
+  const x = Math.max(0, c.cam.x * W - pad), y = Math.max(0, c.cam.y * H - pad);
+  const w = Math.min(W - x, c.cam.w * W + pad * 2), h = Math.min(H - y, c.cam.h * H + pad * 2);
+  const gm = p.game, top = p.faceH + (p.gameH - p.dispH) / 2, sc = OW / gm.w;
+  const dx = (x - gm.x) * sc, dy = top + (y - gm.y) * sc, dw = w * sc, dh = h * sc;
+  if (dx > OW || dy > top + p.dispH || dx + dw < 0 || dy + dh < top) return;
+  const left = x + w / 2 < W / 2, upper = y + h / 2 < H / 2;
+  const side = left ? W - (x + w) : x, vert = upper ? H - (y + h) : y;
+  g.save(); g.beginPath(); g.rect(0, top, OW, p.dispH); g.rect(dx, dy, dw, dh); g.clip("evenodd");
+  g.restore();
+  g.save(); g.beginPath(); g.rect(Math.max(0, dx), Math.max(top, dy), Math.min(OW, dx + dw) - Math.max(0, dx), Math.min(top + p.dispH, dy + dh) - Math.max(top, dy)); g.clip();
+  if (side / w >= vert / h && side >= 8) {
+    const sw = Math.min(w, side), sx = left ? x + w : x - sw;
+    g.translate(dx + dw / 2, 0); g.scale(-1, 1); g.translate(-(dx + dw / 2), 0);
+    blurInto(g, small, sx * k, y * k, sw * k, h * k, dx, dy, dw, dh, 6);
+  } else if (vert >= 8) {
+    const sh = Math.min(h, vert), sy = upper ? y + h : y - sh;
+    g.translate(0, dy + dh / 2); g.scale(1, -1); g.translate(0, -(dy + dh / 2));
+    blurInto(g, small, x * k, sy * k, w * k, sh * k, dx, dy, dw, dh, 6);
+  } else { g.fillStyle = "#000"; g.fillRect(dx, dy, dw, dh); }
+  g.restore();
+}
+function capY(p) {
+  if (!p.faceH) return OH * 0.7;
+  if (S.spot === "low") return p.faceH + p.gameH * 0.7;
+  if (S.spot === "cam") return p.faceH * 0.82;
+  return p.faceH;
+}
+function chunks(words) {
+  const out = []; let cur = [];
+  for (const w of words) {
+    if (cur.length && (cur.length >= S.per_chunk || (cur.map((x) => x[2]).join(" ") + " " + w[2]).length > 20 || w[0] - cur[cur.length - 1][1] > 0.6)) { out.push(cur); cur = []; }
+    cur.push(w);
+    if (/[.!?]$/.test(w[2])) { out.push(cur); cur = []; }
+  }
+  if (cur.length) out.push(cur);
+  return out;
+}
+const cleanWord = (t) => { t = t.replace(/[.,;:]+$/, ""); return S.upper ? t.toUpperCase() : t; };
+function drawCaption(g, p, words, t) {
+  let ch = null, wi = -1;
+  if (words && words.length) {
+    const cs = chunks(words);
+    for (let i = 0; i < cs.length; i++) {
+      const a = cs[i][0][0], end = Math.min(cs[i][cs[i].length - 1][1] + 0.3, i + 1 < cs.length ? cs[i + 1][0][0] : Infinity);
+      if (t >= a && t < Math.max(end, cs[i][cs[i].length - 1][1])) { ch = cs[i]; break; }
+    }
+    if (!ch) return;
+    wi = ch.findIndex((w, i) => t >= w[0] && (i + 1 >= ch.length || t < ch[i + 1][0]));
+    if (wi < 0) wi = 0;
+  } else if (S.subs && !(cur && cur.subsState === "done")) {
+    ch = [[0, 0, "your"], [0, 0, "subtitles"], [0, 0, "here"]].slice(0, Math.max(1, Math.min(3, S.per_chunk))); wi = 0;
+  } else return;
+  g.save();
+  g.font = `900 ${S.font_size}px "${S.font}", "Arial Black", sans-serif`;
+  g.textBaseline = "middle"; g.lineJoin = "round";
+  const ws = ch.map((w) => cleanWord(w[2])), sp = g.measureText(" ").width;
+  const widths = ws.map((w) => g.measureText(w).width);
+  const total = widths.reduce((a, b) => a + b, 0) + sp * (ws.length - 1);
+  const sc = Math.min(1, (OW - 120) / total);
+  g.translate(OW / 2, capY(p)); g.scale(sc, sc);
+  let x = -total / 2;
+  ws.forEach((w, i) => {
+    g.lineWidth = Math.max(6, S.font_size / 6.5); g.strokeStyle = "#000"; g.strokeText(w, x, 0);
+    g.fillStyle = i === wi ? S.color : "#fff"; g.fillText(w, x, 0);
+    x += widths[i] + sp;
+  });
+  g.restore();
+}
+function drawHook(g, p, t) {
+  if (!S.hook || t > S.hook_secs) return;
+  g.save();
+  g.font = `900 ${Math.round(S.font_size * 0.8)}px "${S.font}", "Arial Black", sans-serif`;
+  g.textBaseline = "middle";
+  const txt = S.upper ? S.hook.toUpperCase() : S.hook, w = Math.min(OW - 120, g.measureText(txt).width);
+  const y = p.faceH ? p.faceH * 0.16 : OH * 0.12, h = S.font_size * 0.8 + 36;
+  g.fillStyle = "#fff"; g.fillRect(OW / 2 - w / 2 - 22, y - h / 2, w + 44, h);
+  g.fillStyle = "#000"; g.textAlign = "center"; g.fillText(txt, OW / 2, y, OW - 120);
+  g.restore();
+}
+function compose() {
+  const g = og; g.setTransform(out.width / OW, 0, 0, out.height / OH, 0, 0);
+  g.fillStyle = "#000"; g.fillRect(0, 0, OW, OH);
+  if (!cur || vid.readyState < 2) return;
+  const c = cur, p = plan(c), k = smallFrame(c);
+  if (p.face) g.drawImage(vid, p.face.x, p.face.y, p.face.w, p.face.h, 0, 0, OW, p.faceH);
+  if (p.dispH < p.gameH - 1) {
+    const s = Math.max(OW / c.w, p.gameH / c.h), bw = c.w * s, bh = c.h * s;
+    g.save(); g.beginPath(); g.rect(0, p.faceH, OW, p.gameH); g.clip();
+    blurInto(g, small, 0, 0, small.width, small.height, (OW - bw) / 2, p.faceH + (p.gameH - bh) / 2, bw, bh, 16);
+    g.fillStyle = "rgba(0,0,0,.18)"; g.fillRect(0, p.faceH, OW, p.gameH);
+    g.restore();
+  }
+  const gm = p.game;
+  g.drawImage(vid, gm.x, gm.y, gm.w, gm.h, 0, p.faceH + (p.gameH - p.dispH) / 2, OW, p.dispH);
+  if (p.face && S.hide_cam) hidePatch(g, c, p, k);
+  drawFx(g, p);
+  const t = vid.currentTime, a = c.a || 0, rel = (t - a) / S.speed;
+  if (S.subs) drawCaption(g, p, c.words ? c.words.map((w) => [w[0], w[1], w[2]]) : null, c.words ? t : rel);
+  drawHook(g, p, rel);
+}
+
+// ---------------- overlay boxes on the source video ----------------
+const ov = $("ov"), camBox = $("camBox"), faceDot = $("faceDot"), gameBox = $("gameBox");
+function videoRect() {
+  // the area of the <video> element where the picture is (letterboxed by max-height)
+  const r = vid.getBoundingClientRect(), mr = $("monitor").getBoundingClientRect();
+  if (!cur) return { x: 0, y: 0, w: r.width, h: r.height };
+  const va = cur.w / cur.h, ea = r.width / r.height;
+  let w = r.width, h = r.height;
+  if (ea > va) w = h * va; else h = w / va;
+  return { x: r.left - mr.left + (r.width - w) / 2, y: r.top - mr.top + (r.height - h) / 2, w, h };
+}
+function syncBoxes() {
+  if (!cur) return;
+  const R = videoRect();
+  Object.assign(ov.style, { left: R.x + "px", top: R.y + "px", width: R.w + "px", height: R.h + "px" });
+  const on = S.cam_on && !!cur.cam;
+  camBox.hidden = faceDot.hidden = !on;
+  if (on) {
+    const c = cur.cam;
+    Object.assign(camBox.style, { left: c.x * 100 + "%", top: c.y * 100 + "%", width: c.w * 100 + "%", height: c.h * 100 + "%" });
+    const f = cur.face || { x: c.x + c.w / 2, y: c.y + c.h / 2 };
+    Object.assign(faceDot.style, { left: f.x * 100 + "%", top: f.y * 100 + "%" });
+  }
+  const p = plan(cur), g = p.game;
+  Object.assign(gameBox.style, { left: g.x / cur.w * 100 + "%", top: g.y / cur.h * 100 + "%", width: g.w / cur.w * 100 + "%", height: g.h / cur.h * 100 + "%" });
+}
+new ResizeObserver(syncBoxes).observe($("monitor"));
+vid.addEventListener("loadedmetadata", syncBoxes);
+(function wireDrag() {
+  let mode = null, st = null;
+  const down = (m) => (e) => {
+    if (!cur || !cur.cam) return;
+    e.preventDefault(); e.stopPropagation(); mode = m;
+    const R = videoRect();
+    st = { x: e.clientX, y: e.clientY, cam: { ...cur.cam }, face: cur.face ? { ...cur.face } : { x: cur.cam.x + cur.cam.w / 2, y: cur.cam.y + cur.cam.h / 2 }, w: R.w, h: R.h };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up, { once: true });
+  };
+  const move = (e) => {
+    const dx = (e.clientX - st.x) / st.w, dy = (e.clientY - st.y) / st.h, c = st.cam;
+    if (mode === "move") {
+      const nx = clamp(c.x + dx, 0, 1 - c.w), ny = clamp(c.y + dy, 0, 1 - c.h);
+      cur.cam = { ...c, x: nx, y: ny };
+      cur.face = { x: clamp(st.face.x + nx - c.x, 0, 1), y: clamp(st.face.y + ny - c.y, 0, 1) };
+    } else if (mode === "br") {
+      cur.cam = { ...c, w: clamp(c.w + dx, 0.05, 1 - c.x), h: clamp(c.h + dy, 0.05, 1 - c.y) };
+    } else if (mode === "tl") {
+      const nx = clamp(c.x + dx, 0, c.x + c.w - 0.05), ny = clamp(c.y + dy, 0, c.y + c.h - 0.05);
+      cur.cam = { x: nx, y: ny, w: c.w + c.x - nx, h: c.h + c.y - ny };
+    } else if (mode === "face") {
+      cur.face = { x: clamp(st.face.x + dx, 0, 1), y: clamp(st.face.y + dy, 0, 1) };
+    }
+    if ($("sameAll").checked) shareCam();
+    syncBoxes();
+  };
+  const up = () => { mode = null; window.removeEventListener("pointermove", move); if (cur) cur.camSure = true; if ($("sameAll").checked) shareCam(); saveLayout(); };
+  camBox.querySelector(".tagl").addEventListener("pointerdown", down("move"));
+  camBox.querySelectorAll(".handle").forEach((h) => h.addEventListener("pointerdown", down(h.dataset.h)));
+  faceDot.addEventListener("pointerdown", down("face"));
+})();
+function shareCam() {
+  for (const c of clips) if (c !== cur && c.w === cur.w && c.h === cur.h) { c.cam = cur.cam && { ...cur.cam }; c.face = cur.face && { ...cur.face }; c.camSure = cur.camSure; }
+}
+
+// ---------------- clips ----------------
+function renderChips() {
+  const box = $("clips"); box.innerHTML = "";
+  for (const c of clips) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.setAttribute("aria-pressed", c === cur);
+    const s = document.createElement("span"); s.textContent = (c.source === "twitch" ? "🟣 " : "") + c.name; b.appendChild(s);
+    if (c.source === "twitch") b.title = "From your Twitch stream: edit it, then press Make this clip";
+    const x = document.createElement("b"); x.textContent = "×"; x.title = "Remove";
+    x.onclick = (e) => { e.stopPropagation(); removeClip(c); }; b.appendChild(x);
+    b.onclick = () => select(c); box.appendChild(b);
+  }
+  $("renderAll").disabled = clips.length < 2 || busy;
+  $("renderBtn").disabled = !cur || busy;
+  $("editor").hidden = !cur;
+}
+function removeClip(c) {
+  removedIds.add(c.id);
+  api("/api/remove/" + c.id, {}).catch(() => {});
+  clips.splice(clips.indexOf(c), 1);
+  if (cur === c) { cur = null; vid.removeAttribute("src"); vid.load(); if (clips.length) return select(clips[0]); }
+  renderChips();
+}
+function select(c) {
+  cur = c; $("srcTitle").textContent = c.name;
+  vid.src = "/media/" + c.id; vid.currentTime = 0;
+  renderChips(); renderCaps(); syncTrim(); syncBoxes(); $("findStatus").textContent = ""; $("subsStatus").textContent = ""; showSubsState(); renderFx(); stopFxMedia();
+}
+async function addClips(list, opts) {
+  if (!list || !list.length) return;
+  opts = opts || {};
+  const tpl = clips.find((o) => o.cam && o.camSure);
+  for (const c of list) {
+    Object.assign(c, { cam: null, face: null, a: null, b: null, words: null });
+    const same = S.cam_saved && S.cam_saved.w === c.w && S.cam_saved.h === c.h;
+    if ($("sameAll").checked && tpl && tpl.camSure && tpl.w === c.w && tpl.h === c.h) { c.cam = { ...tpl.cam }; c.face = tpl.face && { ...tpl.face }; c.camSure = true; }
+    else if (same) { c.cam = { ...S.cam_saved.cam }; c.face = S.cam_saved.face && { ...S.cam_saved.face }; c.camSure = true; }
+    clips.push(c);
+  }
+  if (!opts.background || !cur) select(list[0]); else renderChips();
+  for (const c of list) {
+    if (c.source === "twitch") { const saved = c.cam && { cam: c.cam, face: c.face }; c.cam = null; await detect(c); if (!c.camSure && saved) { c.cam = saved.cam; c.face = saved.face; c.camSure = true; if (c === cur) syncBoxes(); } }
+    else if (!c.cam) await detect(c);
+  }
+  if (S.subs) for (const c of list) autoSubs(c);
+}
+// clips that arrive from Twitch auto mode show up here by themselves
+async function pullServerClips() {
+  try {
+    const list = await api("/api/clips");
+    const fresh = list.filter((x) => !clips.some((c) => c.id === x.id) && !removedIds.has(x.id));
+    if (fresh.length) await addClips(fresh, { background: true });
+  } catch (e) {}
+}
+const removedIds = new Set();
+setInterval(pullServerClips, 10000);
+async function detect(c, force) {
+  if (c === cur) $("findStatus").innerHTML = '<span class="muted">Finding your webcam…</span>';
+  try {
+    const r = await api("/api/detect/" + c.id, {});
+    if (r.cam) {
+      c.cam = r.cam; c.face = r.face; c.camSure = true;
+      if ($("sameAll").checked) { const keep = cur; cur = c; shareCam(); cur = keep; }
+      if (c === cur) $("findStatus").innerHTML = '<div class="note ok">Found your webcam. If the pink box isn\'t lined up with it exactly, drag it into place.</div>';
+    } else {
+      if (!c.cam) { c.cam = { x: 0.02, y: 0.03, w: 0.3, h: 0.3 }; c.camSure = false; }
+      if (c === cur) $("findStatus").innerHTML = '<div class="note">Couldn\'t find your webcam in this clip. Drag the pink box onto it, or pick <b>No webcam</b> in Layout.</div>';
+    }
+    saveLayout();
+  } catch (e) { if (c === cur) $("findStatus").innerHTML = '<div class="note">' + e.message + "</div>"; }
+  if (c === cur) syncBoxes();
+}
+const setAdd = (h) => $("addStatus").innerHTML = h;
+$("drop").addEventListener("dragover", (e) => { e.preventDefault(); $("drop").classList.add("over"); });
+$("drop").addEventListener("dragleave", () => $("drop").classList.remove("over"));
+$("drop").addEventListener("drop", (e) => { e.preventDefault(); $("drop").classList.remove("over"); uploadFiles(e.dataTransfer.files); });
+$("fileIn").addEventListener("change", (e) => { uploadFiles(e.target.files); e.target.value = ""; });
+async function uploadFiles(files) {
+  const vids = [...files].filter((f) => f.type.startsWith("video/") || /\.(mp4|mov|mkv|webm|m4v|avi|flv|ts)$/i.test(f.name));
+  if (!vids.length) return setAdd('<div class="note">Those aren\'t videos. Try .mp4, .mov or .webm files.</div>');
+  setAdd('<span class="muted">Adding ' + vids.length + " clip(s)…</span>");
+  const fd = new FormData(); vids.forEach((f) => fd.append("files", f));
+  try { const r = await api("/api/upload", fd); setAdd(""); addClips(r); } catch (e) { setAdd('<div class="note">' + e.message + "</div>"); }
+}
+$("linkBtn").onclick = async () => {
+  const urls = $("linkIn").value.trim(); if (!urls) return;
+  $("linkBtn").disabled = true; setAdd('<span class="muted">Downloading the clip…</span>');
+  try { const r = await api("/api/links", { urls }); setAdd(""); $("linkIn").value = ""; addClips(r); }
+  catch (e) { setAdd('<div class="note">' + e.message + "</div>"); }
+  $("linkBtn").disabled = false;
+};
+$("linkIn").addEventListener("keydown", (e) => { if (e.key === "Enter") $("linkBtn").click(); });
+$("folderBtn").onclick = async () => {
+  const path = $("folderIn").value.trim(); if (!path) return;
+  setAdd('<span class="muted">Adding clips from the folder…</span>');
+  try { const r = await api("/api/folder", { path }); setAdd(""); addClips(r); } catch (e) { setAdd('<div class="note">' + e.message + "</div>"); }
+};
+$("findBtn").onclick = () => cur && detect(cur, true);
+
+// ---------------- trim ----------------
+function syncTrim() {
+  if (!cur) return;
+  const d = cur.dur || vid.duration || 1, a = cur.a ?? 0, b = cur.b ?? d;
+  $("tlSel").style.left = a / d * 100 + "%"; $("tlSel").style.width = Math.max(0, b - a) / d * 100 + "%";
+  $("trimLabel").textContent = cur.a == null && cur.b == null ? "Whole clip (" + fmt(d) + ")" : fmt(a) + " → " + fmt(b) + "  (" + (b - a).toFixed(1) + "s)";
+}
+$("setStart").onclick = () => { if (!cur) return; cur.a = vid.currentTime; if (cur.b != null && cur.b <= cur.a) cur.b = null; syncTrim(); };
+$("setEnd").onclick = () => { if (!cur) return; cur.b = vid.currentTime; if (cur.a != null && cur.a >= cur.b) cur.a = null; syncTrim(); };
+$("clearTrim").onclick = () => { if (!cur) return; cur.a = cur.b = null; syncTrim(); };
+let stopAt = null;
+$("playSel").onclick = () => { if (!cur) return; vid.currentTime = cur.a ?? 0; stopAt = cur.b; vid.play(); };
+vid.addEventListener("timeupdate", () => { if (stopAt != null && vid.currentTime >= stopAt) { vid.pause(); stopAt = null; } });
+$("timeline").addEventListener("click", (e) => { if (!cur) return; const r = e.currentTarget.getBoundingClientRect(); vid.currentTime = (e.clientX - r.left) / r.width * (cur.dur || vid.duration); });
+
+// ---------------- subtitles ----------------
+function renderCaps() {
+  const box = $("caplist"); box.innerHTML = "";
+  if (!cur || !cur.words) { box.innerHTML = '<div class="empty">' + (cur && (cur.subsState === "working" || cur.subsState === "waiting") ? "Writing subtitles for this clip…" : "No subtitles yet. Turn on <b>Add subtitles</b> or press <b>Redo subtitles</b>.") + "</div>"; return; }
+  if (!cur.words.length) { box.innerHTML = '<div class="empty">No talking found in this clip.</div>'; return; }
+  chunks(cur.words).forEach((ch) => {
+    const row = document.createElement("div"); row.className = "cap"; row.dataset.s = ch[0][0]; row.dataset.e = ch[ch.length - 1][1];
+    const t = document.createElement("span"); t.className = "t"; t.textContent = fmt(ch[0][0]); t.title = "Jump here";
+    t.onclick = () => { vid.currentTime = ch[0][0]; };
+    const inp = document.createElement("input"); inp.type = "text"; inp.value = ch.map((w) => w[2]).join(" ");
+    inp.setAttribute("aria-label", "Subtitle at " + fmt(ch[0][0]));
+    inp.addEventListener("focus", () => { vid.currentTime = ch[0][0]; });
+    inp.addEventListener("change", () => {
+      const s0 = ch[0][0], e0 = ch[ch.length - 1][1], ws = inp.value.trim().split(/\s+/).filter(Boolean);
+      const idx = cur.words.indexOf(ch[0]);
+      let repl = [];
+      if (ws.length === ch.length) repl = ch.map((w, i) => [w[0], w[1], ws[i]]);
+      else if (ws.length) {
+        const tot = ws.reduce((a, w) => a + w.length + 2, 0); let t0 = s0;
+        repl = ws.map((w) => { const d = (e0 - s0) * (w.length + 2) / tot, r = [t0, t0 + d, w]; t0 += d; return r; });
+      }
+      cur.words.splice(idx, ch.length, ...repl); renderCaps();
+    });
+    row.append(t, inp); box.appendChild(row);
+  });
+}
+let subsQueue = Promise.resolve();
+function autoSubs(c, force) {
+  if (c.words && !force) return c.subsPromise || Promise.resolve();
+  c.subsState = "waiting";
+  c.subsPromise = subsQueue = subsQueue.then(async () => {
+    if (!clips.includes(c)) return;
+    c.subsState = "working"; if (c === cur) showSubsState();
+    try { const r = await api("/api/subs/" + c.id, { model: S.model, lang: S.lang }); c.words = r.words; c.subsState = "done"; }
+    catch (e) { c.subsState = "error"; c.subsError = e.message; }
+    if (c === cur) { renderCaps(); showSubsState(); }
+  });
+  if (c === cur) showSubsState();
+  return c.subsPromise;
+}
+function showSubsState() {
+  const el = $("subsStatus"), c = cur; if (!c) return;
+  const st = c.subsState;
+  el.innerHTML = st === "waiting" ? '<span class="muted">Subtitles are in line, they\'ll start in a moment…</span>'
+    : st === "working" ? '<span class="muted">✍️ Writing subtitles… (the very first time takes a few minutes while the subtitle AI downloads)</span>'
+    : st === "done" ? (c.words.length ? '<div class="note ok">Subtitles are ready. Fix any wrong word by clicking it below, the preview updates as you play.</div>' : '<div class="note">No talking was found in this clip.</div>')
+    : st === "error" ? '<div class="note">' + (c.subsError || "Subtitles failed.") + ' Press <b>Redo subtitles</b> to try again.</div>' : "";
+  $("previewSubsNote").innerHTML = st === "working" || st === "waiting" ? "✍️ Writing subtitles…" : st === "done" && c.words.length ? 'Subtitles ready ✓ <a href="#" id="toSubs">Fix a word</a>' : "";
+  const ts = $("toSubs"); if (ts) ts.onclick = (e) => { e.preventDefault(); document.querySelector('[data-tab="subs"]').click(); $("settingsPanel").scrollIntoView({ behavior: "smooth" }); };
+}
+$("writeSubs").onclick = () => { if (cur) { cur.words = null; renderCaps(); autoSubs(cur, true); } };
+
+// ---------------- settings controls ----------------
+let saveT = null;
+function saveLayout() {
+  clearTimeout(saveT);
+  saveT = setTimeout(() => {
+    const layout = { ...S }; delete layout.hook; delete layout.cam_saved;
+    if (cur && cur.cam && cur.camSure) { layout.cam_sure = true; layout.cam = cur.cam; layout.face = cur.face; S.cam_saved = { w: cur.w, h: cur.h, cam: cur.cam, face: cur.face }; layout.cam_src = { w: cur.w, h: cur.h }; }
+    api("/api/settings", { layout }).catch(() => {});
+  }, 600);
+}
+const labels = { cam_pct: (v) => v + "%", cam_zoom: (v) => (+v).toFixed(2) + "×", game_zoom: (v) => v == 0 ? "whole screen" : v == 100 ? "fill" : v > 100 ? (1 + (v - 100) / 100 * 1.5).toFixed(2) + "× closer" : v,
+  game_off: (v) => v == 0 ? "center" : (v < 0 ? "left " : "right ") + Math.abs(v),
+  game_off_y: (v) => v == 0 ? "middle" : (v < 0 ? "up " : "down ") + Math.abs(v), per_chunk: (v) => v, font_size: (v) => v + "px", hook_secs: (v) => v + "s", volume: (v) => v + "%" };
+function bindAll() {
+  for (const k of Object.keys(labels)) {
+    const el = $(k), o = $(k + "O"); el.value = S[k]; o.textContent = labels[k](S[k]);
+    el.oninput = () => { S[k] = +el.value; o.textContent = labels[k](S[k]); syncBoxes(); saveLayout(); };
+  }
+  for (const k of ["hide_cam", "subs", "upper", "vivid", "fades"]) { $(k).checked = !!S[k]; $(k).onchange = () => { S[k] = $(k).checked; saveLayout(); if (k === "subs" && S.subs) clips.forEach((c) => autoSubs(c)); }; }
+  for (const k of ["model", "lang"]) { $(k).value = S[k]; $(k).onchange = () => { S[k] = $(k).value; saveLayout(); }; }
+  $("color").value = S.color; $("color").oninput = () => { S.color = $("color").value; saveLayout(); };
+  $("hook").value = S.hook; $("hook").oninput = () => { S.hook = $("hook").value; };
+  seg("camMode", () => S.cam_on ? "on" : "off", (v) => { S.cam_on = v === "on"; });
+  seg("spot", () => S.spot, (v) => { S.spot = v; });
+  seg("font", () => S.font, (v) => { S.font = v; });
+  seg("speed", () => String(S.speed), (v) => { S.speed = +v; });
+}
+function seg(id, get, set) {
+  const btns = [...$(id).querySelectorAll("button")];
+  const sync = () => btns.forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === get()));
+  btns.forEach((b) => b.onclick = () => { set(b.dataset.v); sync(); syncBoxes(); saveLayout(); });
+  sync();
+}
+
+// ---------------- preview controls (they drive the same clip) ----------------
+const togglePlay = () => { if (!cur) return; if (vid.paused) { if (vid.ended) vid.currentTime = cur.a ?? 0; vid.play().catch(() => {}); } else vid.pause(); };
+$("pPlay").onclick = togglePlay;
+out.addEventListener("click", togglePlay);
+let pScrub = false;
+$("pSeek").addEventListener("input", () => { pScrub = true; if (cur) vid.currentTime = $("pSeek").value / 1000 * (cur.dur || vid.duration || 0); });
+$("pSeek").addEventListener("change", () => { pScrub = false; });
+function syncPreviewControls() {
+  const d = (cur && (cur.dur || vid.duration)) || 0;
+  if (!pScrub) $("pSeek").value = d ? vid.currentTime / d * 1000 : 0;
+  $("pTime").textContent = fmt(vid.currentTime) + " / " + fmt(d).replace(/\.\d$/, "");
+  $("pPlay").textContent = vid.paused ? "▶" : "❚❚";
+  $("pPlay").setAttribute("aria-label", vid.paused ? "Play" : "Pause");
+}
+
+// ---------------- rendering ----------------
+async function renderOne(c, label) {
+  if (S.subs && c.subsPromise && c.subsState !== "done") { $("renderStatus").textContent = label + ": waiting for subtitles to finish…"; await c.subsPromise; }
+  const settings = { ...S, cam: S.cam_on ? c.cam : null, face: c.face, trim_start: c.a, trim_end: c.b, words: S.subs ? c.words : [],
+    overlays: (c.fx || []).map((f) => ({ name: f.name, t: f.t, dur: f.dur, pos: f.pos, vol: f.vol })) };
+  delete settings.cam_saved;
+  if (!S.cam_on) settings.cam_on = false;
+  const { job } = await api("/api/render/" + c.id, { settings });
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 700));
+    const j = await api("/api/job/" + job);
+    $("prog").style.width = Math.round((j.progress || 0) * 100) + "%";
+    $("renderStatus").textContent = label + (j.log.length ? ": " + j.log[j.log.length - 1] : "…");
+    if (j.status === "done") return j.output;
+    if (j.status === "error") throw new Error(j.error);
+  }
+}
+async function runRenders(list) {
+  if (busy || !list.length) return;
+  busy = true; renderChips(); $("recDot").classList.add("live"); vid.pause();
+  let ok = 0, last = null;
+  for (let i = 0; i < list.length; i++) {
+    try { last = await renderOne(list[i], list.length > 1 ? `Clip ${i + 1} of ${list.length}` : "Working"); ok++; }
+    catch (e) { $("renderStatus").innerHTML = '<div class="note">' + list[i].name + ": " + e.message + "</div>"; await new Promise((r) => setTimeout(r, 2500)); }
+  }
+  busy = false; renderChips(); $("recDot").classList.remove("live");
+  if (ok) $("renderStatus").innerHTML = `<div class="note ok" style="display:grid;gap:8px">${ok === 1 ? "Your clip is ready ✓" : ok + " clips are ready ✓"}
+    <div class="acts">${ok === 1 && last ? `<button type="button" class="primary" id="readyDl">⬇ Download</button>` : ""}<a class="btn" href="#" id="seeDone">See finished clips</a></div></div>`;
+  const rd = $("readyDl"); if (rd) rd.onclick = async () => { rd.disabled = true; try { const r = await api("/api/download", { name: last }); rd.textContent = "✓ Saved to Downloads"; } catch (e) { rd.textContent = e.message; } };
+  const a = $("seeDone"); if (a) a.onclick = (e) => { e.preventDefault(); document.querySelector('[data-view="done"]').click(); };
+}
+$("renderBtn").onclick = () => cur && runRenders([cur]);
+$("renderAll").onclick = () => runRenders(clips.slice());
+
+// ---------------- finished ----------------
+let playing = null, playingRow = null;
+const outUrl = (n) => "/out/" + encodeURIComponent(n);
+const prettyName = (n) => n.replace(/_vertical(_\d+)?\.mp4$/, "");
+function pick(r) {
+  playing = r.name; playingRow = r;
+  $("player").src = outUrl(r.name); $("playName").textContent = prettyName(r.name);
+  $("playActs").hidden = false;
+  resetSure($("playDel")); resetSure($("playDelAll"));
+  $("playDl").textContent = r.downloaded ? "✓ Downloaded (save again)" : "⬇ Download";
+  document.querySelectorAll(".result").forEach((x) => x.classList.toggle("sel", x.dataset.name === r.name));
+}
+function resetSure(b) { b.classList.remove("sure"); b.textContent = b.dataset.label; }
+async function downloadClip(name, btn) {
+  btn.disabled = true; const was = btn.textContent; btn.textContent = "Saving…";
+  try {
+    const r = await api("/api/download", { name });
+    $("doneStatus").innerHTML = '<div class="note ok">Saved to your Downloads as <b></b> ✓</div>';
+    $("doneStatus").querySelector("b").textContent = r.saved_as;
+    btn.textContent = "✓ Downloaded";
+    setTimeout(loadResults, 400);
+  } catch (e) { btn.textContent = was; $("doneStatus").innerHTML = '<div class="note">' + e.message + "</div>"; }
+  btn.disabled = false;
+}
+async function deleteClip(name, btn, everywhere) {
+  if (!btn.classList.contains("sure")) {
+    btn.classList.add("sure"); btn.textContent = everywhere ? "Tap again: delete from everything" : "Tap again to remove";
+    setTimeout(() => resetSure(btn), 3500); return;
+  }
+  btn.disabled = true;
+  document.querySelectorAll('.result[data-name="' + CSS.escape(name) + '"] video').forEach((v) => { v.removeAttribute("src"); v.load(); });
+  if (playing === name) { $("player").removeAttribute("src"); $("player").load(); playing = null; $("playActs").hidden = true; $("playName").textContent = "Pick a clip"; }
+  await new Promise((r) => setTimeout(r, 300));
+  try {
+    const r = await api("/api/delete-output", { name, everywhere });
+    const what = everywhere ? (r.removed_copies ? "from ClipMaker and your Downloads (it's in the Recycle Bin)" : "from ClipMaker (there was no downloaded copy)") : "from ClipMaker";
+    $("doneStatus").innerHTML = '<div class="note ok">Deleted <b></b> ' + what + ".</div>";
+    $("doneStatus").querySelector("b").textContent = prettyName(name);
+  } catch (e) { $("doneStatus").innerHTML = '<div class="note">' + e.message + "</div>"; }
+  btn.disabled = false; loadResults();
+}
+$("playDl").onclick = () => playing && downloadClip(playing, $("playDl"));
+$("playDel").onclick = () => playing && deleteClip(playing, $("playDel"), false);
+$("playDelAll").onclick = () => playing && deleteClip(playing, $("playDelAll"), true);
+async function loadResults() {
+  const box = $("results");
+  try {
+    const list = await api("/api/outputs");
+    box.innerHTML = list.length ? "" : '<div class="empty">No finished clips yet. Make one and it shows up here.</div>';
+    list.forEach((r, i) => {
+      const row = document.createElement("div"); row.className = "result"; row.dataset.name = r.name;
+      const v = document.createElement("video"); v.src = outUrl(r.name) + "#t=0.5"; v.muted = true; v.preload = "metadata";
+      const n = document.createElement("div"); n.style.display = "grid"; n.style.gap = "4px"; n.style.minWidth = "0";
+      const nn = document.createElement("div"); nn.className = "n"; nn.textContent = prettyName(r.name);
+      const m = document.createElement("div"); m.className = "muted"; m.textContent = r.mb + " MB · " + new Date(r.time * 1000).toLocaleString();
+      const acts = document.createElement("div"); acts.className = "acts";
+      const mk = (label, cls) => { const b = document.createElement("button"); b.type = "button"; b.className = cls; b.textContent = label; b.dataset.label = label; return b; };
+      const dl = mk(r.downloaded ? "✓ Downloaded" : "⬇ Download", r.downloaded ? "" : "primary");
+      dl.title = r.downloaded ? "Already in your Downloads. Click to save another copy." : "Save a copy to your Downloads folder";
+      dl.onclick = (e) => { e.stopPropagation(); downloadClip(r.name, dl); };
+      const del = mk("🗑 Remove", "danger"); del.title = "Remove from ClipMaker, keep your downloaded copy";
+      del.onclick = (e) => { e.stopPropagation(); deleteClip(r.name, del, false); };
+      const delAll = mk("🗑 Delete everywhere", "danger"); delAll.title = "Remove from ClipMaker and your Downloads";
+      delAll.onclick = (e) => { e.stopPropagation(); deleteClip(r.name, delAll, true); };
+      acts.append(dl, del, delAll); n.append(nn, m, acts); row.append(v, n);
+      row.onclick = () => { pick(r); $("player").play().catch(() => {}); };
+      box.appendChild(row);
+      if ((i === 0 && !playing) || r.name === playing) pick(r);
+    });
+    if (!list.length) { $("player").removeAttribute("src"); $("playActs").hidden = true; $("playName").textContent = "Pick a clip"; playing = null; }
+  } catch (e) { box.innerHTML = '<div class="note">' + e.message + "</div>"; }
+}
+$("openFolder").onclick = () => api("/api/open-output", {}).catch(() => {});
+
+// ---------------- twitch ----------------
+let twMode = "after";
+function twSeg() { seg("twMode", () => twMode, (v) => { twMode = v; api("/api/settings", { twitch_mode: v }); }); }
+for (const [id, key] of [["twLogin", "twitch_login"], ["twId", "twitch_client_id"]]) $(id).addEventListener("change", () => api("/api/settings", { [key]: $(id).value.trim() }));
+$("twAutoRender").addEventListener("change", () => api("/api/settings", { twitch_auto_render: $("twAutoRender").checked }));
+$("twSecret").addEventListener("change", () => { const v = $("twSecret").value.trim(); if (v) api("/api/settings", { twitch_secret: v }).then(() => { $("twSecret").value = ""; $("twSecretNote").textContent = "Saved ✓"; }); });
+const twMsg = (h) => $("twStatus").innerHTML = h;
+let twRunning = false;
+function twButton(running) {
+  twRunning = running;
+  const b = $("twStart");
+  b.textContent = running ? "■ Stop watching" : "▶ Start watching";
+  b.classList.toggle("primary", !running);
+}
+$("twStart").onclick = async () => {
+  if (twRunning) { $("twStart").disabled = true; await api("/api/twitch/stop", {}).catch(() => {}); twButton(false); $("twStart").disabled = false; pollTwitch(); return; }
+  if (!ST.twitch_logged_in) await api("/api/settings", { twitch_login: $("twLogin").value.trim(), twitch_client_id: $("twId").value.trim(), ...( $("twSecret").value.trim() ? { twitch_secret: $("twSecret").value.trim() } : {}) });
+  try { await api("/api/twitch/start", {}); twMsg(""); twButton(true); } catch (e) { twMsg('<div class="note">' + e.message + "</div>"); }
+  pollTwitch();
+};
+
+$("twGrab").onclick = async () => { try { await api("/api/twitch/grab", { hours: +$("twHours").value || 12 }); twMsg('<span class="muted">Looking for clips…</span>'); } catch (e) { twMsg('<div class="note">' + e.message + "</div>"); } pollTwitch(); };
+async function pollTwitch() {
+  try {
+    const s = await api("/api/twitch/status");
+    $("twPill").textContent = s.running ? s.status : "Not watching"; $("twPill").classList.toggle("on", s.running);
+    twButton(s.running);
+    $("twLog").textContent = s.log.length ? s.log.join("\n") : "Not watching yet.";
+  } catch (e) {}
+}
+setInterval(pollTwitch, 3000);
+
+
+// ---------------- Log in with Twitch + setup guide ----------------
+let ST = {};
+async function refreshSettings() { try { ST = await api("/api/settings"); } catch (e) {} renderAcct(); return ST; }
+let loginPoll = null;
+async function twitchLogin(out) {
+  out.innerHTML = '<span class="muted">Asking Twitch for a code…</span>';
+  let j; try { j = await api("/api/twitch/login", {}); } catch (e) { out.innerHTML = '<div class="note">' + e.message + "</div>"; return; }
+  out.innerHTML = '<p style="margin:0">A Twitch page just opened in your browser. Make sure it shows this code, then press <b>Activate</b> and <b>Authorize</b>:</p>' +
+    '<div class="twcode">' + j.code + '</div><p class="muted" style="margin:0">No page? Open <a href="' + j.url + '" target="_blank" rel="noopener">twitch.tv/activate</a> and type the code. Waiting for you…</p>';
+  clearInterval(loginPoll);
+  loginPoll = setInterval(async () => {
+    try {
+      const r = await api("/api/twitch/login/check");
+      if (r.done) { clearInterval(loginPoll); await refreshSettings(); out.innerHTML = '<div class="pill on">Connected as ' + (r.login || "you") + ' ✓</div>'; if (!$("setupBg").hidden) drawSetup(); }
+    } catch (e) { clearInterval(loginPoll); out.innerHTML = '<div class="note">' + e.message + "</div>"; }
+  }, 3000);
+}
+function renderAcct() {
+  const box = $("twAcct"); if (!box) return;
+  box.innerHTML = ""; $("twAdv").hidden = !!ST.twitch_logged_in;
+  if (ST.twitch_login && document.activeElement !== $("twLogin")) $("twLogin").value = ST.twitch_login;
+  if (ST.twitch_logged_in) {
+    box.innerHTML = '<span class="pill on">Connected as ' + (ST.twitch_login || "you") + ' ✓</span><span class="grow"></span>';
+    const b = document.createElement("button"); b.type = "button"; b.textContent = "Log out";
+    b.onclick = async () => { await api("/api/twitch/logout", {}); await refreshSettings(); pollTwitch(); };
+    box.appendChild(b);
+  } else if (ST.twitch_ready) {
+    box.innerHTML = '<span class="pill on">Connected with developer keys ✓</span>';
+  } else {
+    const b = document.createElement("button"); b.type = "button"; b.className = "twbtn"; b.textContent = "Log in with Twitch";
+    const out = document.createElement("div"); out.style.flexBasis = "100%";
+    b.onclick = () => twitchLogin(out);
+    box.appendChild(b); box.appendChild(out);
+  }
+}
+const STEPS = ["hi", "twitch", "giphy", "ai", "deck"];
+let stepI = 0;
+function openSetup(at) { stepI = Math.max(0, STEPS.indexOf(at)); $("setupBg").hidden = false; refreshSettings().then(drawSetup); drawSetup(); }
+function closeSetup() { $("setupBg").hidden = true; clearInterval(loginPoll); api("/api/settings", { setup_done: true }).catch(() => {}); }
+$("setupBtn").onclick = () => openSetup("hi");
+$("setupBg").addEventListener("click", (e) => { if (e.target === $("setupBg")) closeSetup(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("setupBg").hidden) closeSetup(); });
+$("setupBack").onclick = () => { if (stepI > 0) { stepI--; drawSetup(); } };
+$("setupNext").onclick = () => { if (stepI < STEPS.length - 1) { stepI++; drawSetup(); } else closeSetup(); };
+function drawSetup() {
+  const step = STEPS[stepI], body = $("setupBody");
+  $("setupDots").innerHTML = STEPS.map((_, i) => '<i class="' + (i <= stepI ? "on" : "") + '"></i>').join("");
+  $("setupStep").textContent = "Step " + (stepI + 1) + " of " + STEPS.length;
+  $("setupBack").style.visibility = stepI ? "visible" : "hidden";
+  $("setupNext").textContent = stepI === STEPS.length - 1 ? "Done 🎉" : "Next →";
+  const ok = (t) => '<span class="pill on">' + t + "</span>";
+  if (step === "hi") {
+    body.innerHTML = '<h2 id="setupTitle">Welcome to ClipMaker 👋</h2><p style="margin:0">It turns your stream clips into TikTok, Reels and Shorts videos: webcam on top, gameplay below, subtitles written for you.</p>' +
+      '<p style="margin:0">This takes about 3 minutes. Every step except Twitch is optional, and you can come back any time with the <b>⚙ Setup</b> button at the top.</p>';
+  } else if (step === "twitch") {
+    body.innerHTML = '<h2 id="setupTitle">1. Connect your Twitch</h2><p style="margin:0">So clips you make with your Stream Deck (or the Clip button on Twitch) show up here by themselves after you stream.</p><div id="sTw"></div>';
+    const box = $("sTw");
+    if (ST.twitch_ready) box.innerHTML = ok("Connected as " + (ST.twitch_login || "you") + " ✓") + ' <span class="muted">You\'re all set. Press Next.</span>';
+    else { const b = document.createElement("button"); b.type = "button"; b.className = "twbtn"; b.textContent = "Log in with Twitch"; const out = document.createElement("div"); out.style.marginTop = "10px"; b.onclick = () => twitchLogin(out); box.appendChild(b); box.appendChild(out); }
+  } else if (step === "giphy") {
+    body.innerHTML = '<h2 id="setupTitle">2. GIFs & stickers (optional)</h2><p style="margin:0">Lets you search GIFs and stickers to drop into clips. GIPHY needs a free key (1 minute):</p>' +
+      '<ol><li>Open <a href="https://developers.giphy.com/dashboard/" target="_blank" rel="noopener">developers.giphy.com</a> and sign up (or log in).</li><li>Click <b>Create an API Key</b>, pick <b>API</b>, name it <b>ClipMaker</b>, tick the box and create it.</li><li>Copy the long key and paste it below.</li></ol>' +
+      '<div class="row"><input type="text" id="sGKey" placeholder="Paste your GIPHY key here" style="flex:1"><button type="button" class="primary" id="sGSave">Save & test</button></div><div id="sGOut">' + (ST.giphy_saved ? ok("Key saved ✓") : '<span class="muted">Skip this if you want, sounds and your own memes still work.</span>') + "</div>";
+    $("sGSave").onclick = async () => {
+      const k = $("sGKey").value.trim(); if (!k) return;
+      $("sGOut").innerHTML = '<span class="muted">Testing…</span>';
+      await api("/api/settings", { giphy_key: k });
+      try { const r = await api("/api/giphy?kind=gifs&offset=0&q=hype"); if (!(r.items || r).length) throw new Error();
+        $("sGOut").innerHTML = ok("It works ✓"); $("sGKey").value = ""; gShow(true); await refreshSettings();
+      } catch (e) { $("sGOut").innerHTML = '<div class="note">GIPHY didn\'t accept that key. Copy it again (the whole thing) and paste it.</div>'; }
+    };
+  } else if (step === "ai") {
+    body.innerHTML = '<h2 id="setupTitle">3. The AI helper (optional)</h2><p style="margin:0">A small free AI that runs on your PC. Ask it things like <i>"add the vine boom when I say no way"</i> or <i>"write me a TikTok caption"</i>, or ask it how to do something in ClipMaker.</p><div id="sAi"></div>';
+    const draw = async () => {
+      const box = $("sAi"); if (!box) return;
+      let st = {}; try { st = await api("/api/ai/status"); } catch (e) {}
+      if (STEPS[stepI] !== "ai") return;
+      if (st.installed) { box.innerHTML = ok("The AI is ready ✓") + ' <span class="muted">Click <b>Ask AI</b> at the bottom right any time.</span>'; return; }
+      if (st.status === "downloading" || st.status === "starting") { box.innerHTML = '<span class="muted">Downloading… ' + Math.round((st.progress || 0) * 100) + "% (you can press Next, it keeps going)</span>"; setTimeout(draw, 2000); return; }
+      box.innerHTML = '<p class="muted" style="margin:0 0 8px">One-time download of about 2 GB. It runs in the background.</p>';
+      const b = document.createElement("button"); b.type = "button"; b.className = "primary"; b.textContent = "Set up the AI (free)";
+      b.onclick = async () => { b.disabled = true; await api("/api/ai/setup", {}); setTimeout(draw, 800); };
+      box.appendChild(b);
+      if (st.error) box.insertAdjacentHTML("beforeend", '<div class="note">Last try didn\'t finish: ' + st.error + "</div>");
+    };
+    draw();
+  } else if (step === "deck") {
+    body.innerHTML = '<h2 id="setupTitle">4. Your Stream Deck + first clip</h2><ol>' +
+      "<li><b>Keep your Stream Deck clip button exactly how it is.</b> Any Twitch clip works, from the Deck, the Clip button, or a mod.</li>" +
+      "<li>Before you go live, open ClipMaker (double-click start.bat or your desktop icon) and leave it open. You can minimize it.</li>" +
+      "<li>After stream, your clips show up in <b>Make clips</b> with a 🟣. Brand-new clips can take a few minutes to appear.</li>" +
+      "<li>On your first clip, check the <b>pink box</b> is on your webcam. Drag the <b>✥ Webcam</b> tag to move it, and a corner to resize. ClipMaker remembers it for next time.</li>" +
+      "<li>Add sounds or GIFs, then press <b>Make this clip</b>. It lands in <b>Finished clips</b>, where you press Download.</li></ol><div id=\"sW\"></div>";
+    const box = $("sW");
+    if (!ST.twitch_ready) box.innerHTML = '<span class="muted">Connect Twitch in step 1 to turn on auto clips.</span>';
+    else if (twRunning) box.innerHTML = ok("Watching for your clips ✓");
+    else { const b = document.createElement("button"); b.type = "button"; b.className = "primary"; b.textContent = "▶ Start watching for my clips";
+      b.onclick = async () => { try { await api("/api/twitch/start", {}); twButton(true); box.innerHTML = ok("Watching for your clips ✓"); pollTwitch(); } catch (e) { box.innerHTML = '<div class="note">' + e.message + "</div>"; } };
+      box.appendChild(b); }
+  }
+}
+
+// ---------------- one-click updates ----------------
+async function checkUpdate() {
+  try {
+    const u = await api("/api/update");
+    $("updBar").hidden = !u.available; $("updBar").style.display = u.available ? "flex" : "none";
+  } catch (e) {}
+}
+$("updBtn").onclick = async () => {
+  $("updBtn").disabled = true; $("updText").textContent = "Updating… ClipMaker will restart by itself in a few seconds.";
+  try { await api("/api/update", {}); } catch (e) { $("updText").textContent = e.message; $("updBtn").disabled = false; }
+};
+checkUpdate(); setInterval(checkUpdate, 10 * 60 * 1000);
+
+// ---------------- loop ----------------
+let lastDraw = 0;
+function frame(now) {
+  const gap = vid.paused ? 150 : 42;
+  if (now - lastDraw < gap) { requestAnimationFrame(frame); return; }
+  lastDraw = now;
+  if (cur) {
+    compose(); syncPreviewControls();
+    const d = cur.dur || vid.duration || 1;
+    $("tlPh").style.left = clamp(vid.currentTime / d * 100, 0, 100) + "%";
+    for (const r of $("caplist").children) if (r.dataset.s) r.classList.toggle("now", vid.currentTime >= +r.dataset.s && vid.currentTime < +r.dataset.e);
+  } else compose();
+  requestAnimationFrame(frame);
+}
+
+
+// ---------------- sounds, meme clips & pictures ----------------
+let lib = [];
+const libUrl = (n) => "/lib/" + encodeURIComponent(n);
+const kindIcon = { sound: "🔊", image: "🖼️", gif: "🎞️", video: "🎬" };
+const fxMedia = {};
+function mediaFor(it) {
+  if (fxMedia[it.name]) return fxMedia[it.name];
+  let el;
+  if (it.kind === "image" || it.kind === "gif") { el = new Image(); el.src = libUrl(it.name); }
+  else if (it.kind === "video") { el = document.createElement("video"); el.src = libUrl(it.name); el.preload = "auto"; el.playsInline = true; }
+  else { el = new Audio(libUrl(it.name)); el.preload = "auto"; }
+  return (fxMedia[it.name] = el);
+}
+async function loadLib() { try { lib = await api("/api/library"); } catch (e) { lib = []; } renderLib(); renderFx(); }
+function renderLib() {
+  const g = $("libgrid"); g.innerHTML = "";
+  if (!lib.length) { g.innerHTML = '<div class="empty" style="grid-column:1/-1">No sounds or memes yet. Drop some files above, like a vine boom, a bruh sound, a meme clip or a funny picture.</div>'; return; }
+  for (const it of lib) {
+    const d = document.createElement("div"); d.className = "libitem";
+    const th = document.createElement("div"); th.className = "thumb";
+    if (it.kind === "image" || it.kind === "gif") { const im = document.createElement("img"); im.src = libUrl(it.name); im.alt = ""; th.appendChild(im); }
+    else if (it.kind === "video") { const v = document.createElement("video"); v.src = libUrl(it.name) + "#t=0.3"; v.muted = true; v.preload = "metadata"; th.appendChild(v); }
+    else th.textContent = "🔊";
+    const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = kindIcon[it.kind] + " " + it.name.replace(/\.[^.]+$/, ""); nm.title = it.name;
+    const row = document.createElement("div"); row.className = "row";
+    const play = document.createElement("button"); play.type = "button"; play.textContent = "▶"; play.title = "Preview";
+    play.onclick = () => { const m = mediaFor(it); if (m.play) { m.currentTime = 0; m.muted = false; m.play().catch(() => {}); setTimeout(() => m.pause && m.pause(), 4000); } else window.open(libUrl(it.name)); };
+    const add = document.createElement("button"); add.type = "button"; add.className = "primary"; add.textContent = "+ Add here";
+    add.title = "Add at the current moment of your clip"; add.onclick = () => { if (!cur) return; addFx(it.name); };
+    const del = document.createElement("button"); del.type = "button"; del.textContent = "✕"; del.title = "Remove from your library";
+    del.onclick = async () => { if (!del.classList.contains("sure")) { del.classList.add("sure"); del.textContent = "sure?"; setTimeout(() => { del.classList.remove("sure"); del.textContent = "✕"; }, 3000); return; } await api("/api/library/delete", { name: it.name }); loadLib(); };
+    row.append(play, add, del); d.append(th, nm, row); g.appendChild(d);
+  }
+}
+function addFx(name, at, seconds, where) {
+  const it = lib.find((x) => x.name === name) || lib.find((x) => x.name.toLowerCase().startsWith(String(name).toLowerCase()));
+  if (!it || !cur) return null;
+  const natural = it.kind === "image" ? 2 : Math.max(0.5, it.len || 2);
+  const dur = seconds ? +seconds : Math.min(natural, it.kind === "sound" ? 8 : 4);
+  cur.fx = cur.fx || [];
+  const fx = { name: it.name, t: +(at ?? vid.currentTime).toFixed(2), dur: +dur.toFixed(1), pos: ["center", "full", "game"].includes(where) ? where : "center", vol: 100 };
+  cur.fx.push(fx); renderFx(); return fx;
+}
+function renderFx() {
+  const box = $("fxlist"); box.innerHTML = "";
+  if (!cur || !cur.fx || !cur.fx.length) { box.innerHTML = '<div class="empty">Nothing added yet.</div>'; return; }
+  cur.fx.sort((a, b) => a.t - b.t);
+  cur.fx.forEach((f, i) => {
+    const it = lib.find((x) => x.name === f.name) || { kind: "sound" };
+    const row = document.createElement("div"); row.className = "fx";
+    const t = document.createElement("span"); t.className = "t"; t.textContent = fmt(f.t); t.title = "Jump here"; t.onclick = () => { vid.currentTime = f.t; };
+    const mid = document.createElement("div"); mid.className = "mid";
+    const n = document.createElement("span"); n.textContent = (kindIcon[it.kind] || "") + " " + f.name.replace(/\.[^.]+$/, ""); n.style.fontWeight = "600";
+    const dl = document.createElement("label"); dl.className = "muted"; dl.textContent = "for ";
+    const di = document.createElement("input"); di.type = "number"; di.min = "0.3"; di.max = "15"; di.step = "0.1"; di.value = f.dur; di.style.width = "64px";
+    di.onchange = () => { f.dur = Math.max(0.3, +di.value || 2); }; dl.appendChild(di); dl.append(" s");
+    mid.append(n, dl);
+    if (it.kind !== "sound") {
+      const ps = document.createElement("select");
+      for (const [v, l] of [["center", "Middle"], ["full", "Full screen"], ["game", "Over gameplay"]]) { const o = document.createElement("option"); o.value = v; o.textContent = l; ps.appendChild(o); }
+      ps.value = f.pos; ps.onchange = () => { f.pos = ps.value; }; mid.appendChild(ps);
+    }
+    const x = document.createElement("button"); x.type = "button"; x.textContent = "✕"; x.title = "Remove"; x.onclick = () => { cur.fx.splice(i, 1); renderFx(); };
+    row.append(t, mid, x); box.appendChild(row);
+  });
+}
+function fxBox(p, pos) {
+  if (pos === "full") return { w: OW, h: OH, yc: OH / 2 };
+  if (pos === "game") return { w: OW, h: p.gameH, yc: p.faceH + p.gameH / 2 };
+  return { w: OW * 0.8, h: OH * 0.45, yc: OH / 2 };
+}
+function drawFx(g, p) {
+  if (!cur || !cur.fx) return;
+  const vt = vid.currentTime;
+  for (const f of cur.fx) {
+    const it = lib.find((x) => x.name === f.name); if (!it) continue;
+    const on = vt >= f.t && vt < f.t + f.dur;
+    const m = mediaFor(it);
+    if (it.kind === "sound" || it.kind === "video") {
+      if (on && !vid.paused) { if (m.paused) { m.currentTime = Math.max(0, vt - f.t); m.muted = false; m.volume = Math.min(1, (f.vol || 100) / 100); m.play().catch(() => {}); } }
+      else if (!m.paused && !(vt >= f.t && vt < f.t + f.dur && !vid.paused)) m.pause();
+      if (it.kind === "video" && on && vid.paused && Math.abs(m.currentTime - (vt - f.t)) > 0.3) m.currentTime = Math.max(0, vt - f.t);
+    }
+    if (!on || it.kind === "sound") continue;
+    const iw = m.videoWidth || m.naturalWidth, ih = m.videoHeight || m.naturalHeight;
+    if (!iw || !ih) continue;
+    const b = fxBox(p, f.pos), sc = Math.min(b.w / iw, b.h / ih), w = iw * sc, h = ih * sc;
+    try { g.drawImage(m, (OW - w) / 2, b.yc - h / 2, w, h); } catch (e) {}
+  }
+}
+function stopFxMedia() { for (const k in fxMedia) { const m = fxMedia[k]; if (m.pause) m.pause(); } }
+vid.addEventListener("pause", stopFxMedia);
+vid.addEventListener("seeking", stopFxMedia);
+$("libIn").addEventListener("change", (e) => { uploadLib(e.target.files); e.target.value = ""; });
+$("libDrop").addEventListener("dragover", (e) => { e.preventDefault(); $("libDrop").classList.add("over"); });
+$("libDrop").addEventListener("dragleave", () => $("libDrop").classList.remove("over"));
+$("libDrop").addEventListener("drop", (e) => { e.preventDefault(); $("libDrop").classList.remove("over"); uploadLib(e.dataTransfer.files); });
+async function uploadLib(files) {
+  if (!files || !files.length) return;
+  const fd = new FormData(); [...files].forEach((f) => fd.append("files", f));
+  try { await api("/api/library/upload", fd); } catch (e) { $("libgrid").insertAdjacentHTML("afterbegin", '<div class="note" style="grid-column:1/-1">' + e.message + "</div>"); }
+  loadLib();
+}
+
+
+// ---------------- GIF & sticker search (GIPHY) ----------------
+let gKind = "gifs", gOffset = 0, gLastQ = "";
+function gShow(saved) { $("gKeyBox").hidden = !!saved; $("gSearchBox").hidden = !saved; if (saved && !$("gGrid").children.length) gSearch(""); }
+document.querySelectorAll("#gKind button").forEach((b) => b.onclick = () => {
+  gKind = b.dataset.v; document.querySelectorAll("#gKind button").forEach((x) => x.setAttribute("aria-pressed", x === b)); gSearch($("gQ").value);
+});
+$("gKeySave").onclick = async () => { const k = $("gKey").value.trim(); if (!k) return; await api("/api/settings", { giphy_key: k }); $("gKey").value = ""; gShow(true); };
+$("gChangeKey").onclick = (e) => { e.preventDefault(); gShow(false); };
+$("gGo").onclick = () => gSearch($("gQ").value);
+$("gQ").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); gSearch($("gQ").value); } });
+$("gMore").onclick = () => gSearch(gLastQ, gOffset);
+async function gSearch(q, offset) {
+  offset = offset || 0; gLastQ = q;
+  if (!offset) $("gGrid").innerHTML = "";
+  $("gStatus").innerHTML = '<span class="muted">' + (q ? "Searching…" : "Loading what's trending…") + "</span>";
+  try {
+    const list = await api("/api/giphy?kind=" + gKind + "&offset=" + offset + "&q=" + encodeURIComponent(q || ""));
+    $("gStatus").textContent = list.length ? "" : "Nothing found. Try another word.";
+    gOffset = offset + list.length; $("gMore").hidden = list.length < 24;
+    for (const it of list) {
+      const b = document.createElement("button"); b.type = "button"; b.className = "gitem" + (gKind === "stickers" ? " stk" : ""); b.title = it.title + " (click to add at the current moment)";
+      const im = document.createElement("img"); im.src = it.preview; im.alt = it.title; im.loading = "lazy"; b.appendChild(im);
+      b.onclick = () => gAdd(it, gKind, b);
+      $("gGrid").appendChild(b);
+    }
+  } catch (e) { $("gStatus").innerHTML = '<div class="note">' + e.message + "</div>"; if (/key/i.test(e.message)) gShow(false); }
+}
+async function gAdd(it, kind, btn, at, seconds, where) {
+  if (!cur) { $("gStatus").innerHTML = '<div class="note">Add a clip first, then pick a GIF.</div>'; return null; }
+  const when = at ?? vid.currentTime;
+  if (btn) btn.disabled = true;
+  try {
+    const r = await api("/api/giphy/save", { ...it, kind });
+    await loadLib();
+    const f = addFx(r.name, when, seconds || 2, where || (kind === "stickers" ? "center" : "game"));
+    if (btn) { const ok = document.createElement("span"); ok.className = "ok"; ok.textContent = "Added ✓"; btn.appendChild(ok); }
+    return f;
+  } catch (e) { $("gStatus").innerHTML = '<div class="note">' + e.message + "</div>"; return null; }
+  finally { if (btn) btn.disabled = false; }
+}
+
+// ---------------- combine clips ----------------
+const pieces = [];
+function renderPieces() {
+  const box = $("pieces"); box.innerHTML = "";
+  let total = 0;
+  pieces.forEach((pc, i) => {
+    total += pc.end - pc.start;
+    const row = document.createElement("div"); row.className = "piece";
+    const t = document.createElement("span"); t.className = "t"; t.textContent = (i + 1) + ".";
+    const mid = document.createElement("div"); mid.className = "mid";
+    const n = document.createElement("span"); n.className = "n"; n.textContent = pc.name;
+    const tm = document.createElement("span"); tm.className = "time"; tm.textContent = fmt(pc.start) + " → " + fmt(pc.end) + "  (" + (pc.end - pc.start).toFixed(1) + "s)";
+    mid.append(n, tm);
+    const acts = document.createElement("div"); acts.className = "row"; acts.style.gap = "4px";
+    const mk = (l, f, title) => { const b = document.createElement("button"); b.type = "button"; b.textContent = l; b.title = title; b.onclick = f; return b; };
+    acts.append(
+      mk("↑", () => { if (i) { pieces.splice(i - 1, 0, pieces.splice(i, 1)[0]); renderPieces(); } }, "Move up"),
+      mk("↓", () => { if (i < pieces.length - 1) { pieces.splice(i + 1, 0, pieces.splice(i, 1)[0]); renderPieces(); } }, "Move down"),
+      mk("✕", () => { pieces.splice(i, 1); renderPieces(); }, "Remove"));
+    row.append(t, mid, acts); box.appendChild(row);
+  });
+  $("piecesTotal").textContent = pieces.length ? "Total: " + total.toFixed(1) + "s" : "";
+  $("makeCombined").disabled = !pieces.length || busy;
+}
+$("addPiece").onclick = () => {
+  if (!cur) return;
+  const a = cur.a ?? 0, b = cur.b ?? (cur.dur || vid.duration || 0);
+  pieces.push({ id: cur.id, name: cur.name, start: +a.toFixed(2), end: +b.toFixed(2) });
+  renderPieces();
+};
+async function makeCombined(list, name) {
+  $("makeCombined").disabled = true; $("findStatus").innerHTML = '<span class="muted">Combining the clips…</span>';
+  try {
+    const r = await api("/api/combine", { pieces: list.map((p) => ({ id: p.id, start: p.start, end: p.end })), name });
+    $("findStatus").textContent = "";
+    await addClips([r]);
+    return r;
+  } catch (e) { $("findStatus").innerHTML = '<div class="note">' + e.message + "</div>"; throw e; }
+  finally { renderPieces(); }
+}
+$("makeCombined").onclick = async () => { const list = pieces.splice(0); renderPieces(); try { await makeCombined(list); } catch (e) { pieces.push(...list); renderPieces(); } };
+
+// ---------------- AI helper ----------------
+const aiHist = [];
+let aiPoll = null, aiBusy = false;
+const aiBox = $("aiMsgs");
+function aiSay(text, who, extra) {
+  const d = document.createElement("div"); d.className = "msg " + who; d.textContent = text;
+  if (extra) d.appendChild(extra);
+  aiBox.appendChild(d); aiBox.scrollTop = aiBox.scrollHeight; return d;
+}
+function chipRow(list) {
+  const r = document.createElement("div"); r.className = "chips2";
+  for (const q of list) { const b = document.createElement("button"); b.type = "button"; b.textContent = q; b.onclick = () => { $("aiIn").value = q; $("aiForm").requestSubmit(); }; r.appendChild(b); }
+  aiBox.appendChild(r); aiBox.scrollTop = aiBox.scrollHeight;
+}
+async function aiCheck() {
+  let st; try { st = await api("/api/ai/status"); } catch (e) { return; }
+  $("aiSend").disabled = !st.installed;
+  if (st.installed) {
+    clearInterval(aiPoll); aiPoll = null;
+    if (!aiBox.dataset.greeted) {
+      aiBox.innerHTML = ""; aiBox.dataset.greeted = "1";
+      aiSay("Hey! I can edit for you. Tell me what you want, like combining parts of clips, trimming, adding a sound at a funny moment, hook text, or a caption for TikTok.", "bot");
+      chipRow(["Write me a TikTok caption", "Add a vine boom where I say no way", "Cut this clip to the best 10 seconds"]);
+    }
+    return;
+  }
+  aiBox.dataset.greeted = "";
+  aiBox.innerHTML = "";
+  if (st.status === "downloading" || st.status === "starting") {
+    aiSay("Setting up the AI… " + Math.round((st.progress || 0) * 100) + "%\n" + (st.message || ""), "bot");
+    if (!aiPoll) aiPoll = setInterval(aiCheck, 1500);
+    return;
+  }
+  const b = document.createElement("button"); b.type = "button"; b.className = "primary"; b.textContent = "Set up the AI (free)"; b.style.marginTop = "8px";
+  b.onclick = async () => { b.disabled = true; await api("/api/ai/setup", {}); aiCheck(); };
+  const wrap = document.createElement("div"); wrap.appendChild(b);
+  aiSay("I'm a small AI that runs right on your PC: free, no account, works offline. I need a one-time download of about 2 GB. It runs in the background, so you can keep using ClipMaker." + (st.error ? "\n\nLast try didn't finish: " + st.error : ""), "bot", wrap);
+}
+$("aiBtn").onclick = () => { $("aiPanel").hidden = !$("aiPanel").hidden; if (!$("aiPanel").hidden) { aiCheck(); $("aiIn").focus(); } };
+$("aiClose").onclick = () => { $("aiPanel").hidden = true; };
+$("aiIn").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("aiForm").requestSubmit(); } });
+$("aiForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const q = $("aiIn").value.trim(); if (!q || aiBusy) return;
+  $("aiIn").value = ""; aiSay(q, "me"); aiHist.push({ role: "user", content: q });
+  aiBusy = true; $("aiSend").disabled = true;
+  const thinking = aiSay("Thinking…", "bot");
+  try {
+    const context = { clips: clips.map((c) => ({ name: c.name, dur: c.dur, current: c === cur })), time: vid.currentTime || 0,
+      trim: cur && (cur.a != null || cur.b != null) ? fmt(cur.a ?? 0) + " to " + fmt(cur.b ?? cur.dur) : "", words: cur && cur.words ? cur.words : [] };
+    const r = await api("/api/ai/chat", { messages: aiHist, context });
+    thinking.remove();
+    aiSay(r.reply, "bot"); aiHist.push({ role: "assistant", content: JSON.stringify(r) });
+    for (const a of r.actions || []) {
+      if (ASKED[a.do] && !ASKED[a.do].test(q)) continue;   // skip things the user didn't ask for
+      try { const done = await runAction(a); if (done) aiSay("✓ " + done, "did"); }
+      catch (err) { aiSay("⚠ " + err.message, "did"); }
+    }
+  } catch (err) { thinking.textContent = err.message; }
+  aiBusy = false; $("aiSend").disabled = false;
+});
+const num = (v, d) => (v === undefined || v === null || isNaN(+v) ? d : +v);
+const norm = (w) => String(w).toLowerCase().replace(/[^a-z0-9']/g, "").replace(/'/g, "");
+function findSaid(phrase, occurrence) {
+  if (!cur || !cur.words || !cur.words.length) return null;
+  const want = String(phrase).split(/\s+/).map(norm).filter(Boolean); if (!want.length) return null;
+  let seen = 0;
+  for (let i = 0; i + want.length <= cur.words.length; i++) {
+    if (want.every((w, j) => norm(cur.words[i + j][2]) === w || (w.length > 3 && norm(cur.words[i + j][2]).startsWith(w)))) {
+      seen++; if (seen === Math.max(1, occurrence || 1)) return cur.words[i][0];
+    }
+  }
+  return null;
+}
+const ASKED = { hook: /hook|title|text on top|top text|headline/i, caption: /caption|hashtag|description|post text|write.*(post|tiktok)/i,
+  make_clip: /make (it|the|this|a)? ?clip|render|export|finish|make it/i, gif: /gif|sticker|meme|picture|image|reaction|emoji/i, speed: /speed|faster|slower|sped/i, combine: /combine|join|merge|stitch|put together|then|after that/i };
+async function runAction(a) {
+  switch (a.do) {
+    case "combine": {
+      const list = (a.pieces || []).map((p) => {
+        const c = clips[num(p.clip, 1) - 1]; if (!c) throw new Error("There's no clip " + p.clip + ".");
+        const st = Math.max(0, num(p.start, 0)), en = Math.min(c.dur || 1e9, num(p.end, st + 3));
+        return { id: c.id, name: c.name, start: st, end: en };
+      });
+      if (!list.length) return null;
+      const r = await makeCombined(list);
+      return "Made " + r.name + " (" + list.reduce((t, p) => t + p.end - p.start, 0).toFixed(1) + "s)";
+    }
+    case "trim": if (!cur) throw new Error("Add a clip first."); cur.a = Math.max(0, num(a.start, 0)); cur.b = Math.min(cur.dur || 1e9, num(a.end, cur.dur)); syncTrim(); vid.currentTime = cur.a; return "Trimmed to " + fmt(cur.a) + " → " + fmt(cur.b);
+    case "add_effect": {
+      if (!cur) throw new Error("Add a clip first.");
+      let at = num(a.at, vid.currentTime);
+      if (a.when_said) {
+        const t = findSaid(a.when_said, num(a.occurrence, 1));
+        if (t === null) throw new Error("I couldn't find \"" + a.when_said + "\" in this clip's subtitles" + (cur.words ? "." : " (they're still being written, try again in a moment)."));
+        at = t;
+      }
+      const f = addFx(a.name, at, num(a.seconds, 0) || undefined, a.where);
+      if (!f) throw new Error("I couldn't find \"" + a.name + "\" in your sounds & memes.");
+      vid.currentTime = Math.max(0, f.t - 1.5);
+      return "Added " + f.name.replace(/\.[^.]+$/, "") + " at " + fmt(f.t) + (a.when_said ? " (when you say \"" + a.when_said + "\")" : "");
+    }
+    case "gif": {
+      if (!cur) throw new Error("Add a clip first.");
+      let at = num(a.at, vid.currentTime);
+      if (a.when_said) { const t = findSaid(a.when_said, num(a.occurrence, 1)); if (t === null) throw new Error('I couldn\'t find "' + a.when_said + '" in this clip\'s subtitles.'); at = t; }
+      const kind = a.kind === "stickers" || a.kind === "sticker" ? "stickers" : "gifs";
+      const list = await api("/api/giphy?kind=" + kind + "&q=" + encodeURIComponent(a.search || "funny"));
+      if (!list.length) throw new Error('GIPHY had nothing for "' + a.search + '".');
+      const f = await gAdd(list[0], kind, null, at, num(a.seconds, 2), a.where);
+      if (!f) throw new Error("Couldn't add that one.");
+      vid.currentTime = Math.max(0, f.t - 1.5);
+      return 'Added a "' + a.search + '" ' + (kind === "stickers" ? "sticker" : "GIF") + " at " + fmt(f.t) + " (see Sounds & memes to swap it)";
+    }
+    case "hook": S.hook = String(a.text || ""); $("hook").value = S.hook; return "Hook text: " + S.hook;
+    case "speed": { const v = [1, 1.1, 1.25, 1.5].reduce((b, x) => Math.abs(x - num(a.value, 1)) < Math.abs(b - num(a.value, 1)) ? x : b, 1); const btn = document.querySelector('#speed [data-v="' + v + '"]'); if (btn) btn.click(); return "Speed " + v + "×"; }
+    case "seek": vid.currentTime = Math.max(0, num(a.at, 0)); return null;
+    case "setting": {
+      const k = a.key, el = $(k); if (!el || !(k in S)) return null;
+      if (el.type === "checkbox") { el.checked = !!a.value; el.dispatchEvent(new Event("change")); }
+      else { el.value = a.value; el.dispatchEvent(new Event("input")); }
+      return "Changed " + k.replace(/_/g, " ");
+    }
+    case "caption": {
+      const box = document.createElement("div"); const b = document.createElement("button"); b.type = "button"; b.textContent = "Copy"; b.style.marginTop = "6px";
+      b.onclick = async () => { try { await navigator.clipboard.writeText(a.text); b.textContent = "Copied ✓"; } catch (e) { b.textContent = "Select and copy it"; } };
+      box.appendChild(b); aiSay(String(a.text || ""), "bot", box); return null;
+    }
+    case "make_clip": $("renderBtn").click(); return "Making the clip…";
+    case "open_setup": openSetup(a.step || "hi"); return null;
+  }
+  return null;
+}
+
+// ---------------- stay up to date: reload when ClipMaker is updated ----------------
+let uiVersion = null, uiBoot = null;
+setInterval(async () => {
+  try {
+    const { v, boot } = await api("/api/version");
+    if (uiVersion === null) { uiVersion = v; uiBoot = boot; }
+    else if ((v !== uiVersion || (boot && boot !== uiBoot)) && !busy) location.reload();   // ClipMaker was updated or restarted
+  } catch (e) {}
+}, 3000);
+
+// ---------------- boot ----------------
+(async () => {
+  try {
+    const st = await api("/api/settings");
+    Object.assign(S, st.layout || {});
+    if (st.layout && st.layout.cam && st.layout.cam_src && st.layout.cam_sure) S.cam_saved = { w: st.layout.cam_src.w, h: st.layout.cam_src.h, cam: st.layout.cam, face: st.layout.face };
+    delete S.cam; delete S.face; delete S.cam_src; delete S.cam_sure; delete S.words; delete S.trim_start; delete S.trim_end;
+    S.color = S.color || "#ffd400"; S.hook = "";
+    $("twLogin").value = st.twitch_login || ""; $("twId").value = st.twitch_client_id || "";
+    $("twSecretNote").textContent = st.twitch_secret_saved ? "Saved ✓ (hidden)" : "";
+    twMode = st.twitch_mode === "during" ? "during" : "after";
+    gShow(!!st.giphy_saved);
+    $("twAutoRender").checked = !!st.twitch_auto_render;
+    ST = st; renderAcct();
+    if (!st.setup_done && !st.twitch_ready) openSetup("hi");
+  } catch (e) {}
+  bindAll(); twSeg(); renderChips(); renderCaps(); pollTwitch(); loadLib(); renderPieces(); pullServerClips();
+  requestAnimationFrame(frame);
+})();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+gradio>=4.44,<6
+opencv-python>=4.8,<5
+numpy
+faster-whisper>=1.0
+yt-dlp
+imageio-ffmpeg
+requests

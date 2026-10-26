@@ -1,0 +1,9 @@
+settings.json
+downloaded.json
+runtime/
+ai/
+inbox/
+work/
+output/
+browser-profile/
+__pycache__/
