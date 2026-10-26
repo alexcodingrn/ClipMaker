@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ClipMaker</title>
+<link rel="icon" href="clipmaker.ico">
+<style>
+:root { --bg: #0f0e14; --fg: #f1eff7; --muted: #a29db3; --accent: #ff4d8d; --game: #3cc8ea; --sub: #ffd400; }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: "Segoe UI", system-ui, sans-serif; display: grid; place-items: center; overflow: hidden; }
+.box { display: grid; justify-items: center; gap: 22px; }
+.logo { width: 118px; height: 118px; border-radius: 30px; background: #e5306f; display: grid; place-items: center;
+        box-shadow: 0 18px 60px rgb(229 48 111 / .35); animation: bob 2.4s ease-in-out infinite; }
+.phone { width: 50px; height: 88px; background: #fff; border-radius: 10px; padding: 6px; display: grid; grid-template-rows: 1fr 1fr; gap: 4px; }
+.cam { background: #17151f; border-radius: 4px; display: grid; place-items: center; }
+.cam i { width: 0; height: 0; border-left: 12px solid var(--sub); border-top: 8px solid transparent; border-bottom: 8px solid transparent; margin-left: 3px; }
+.game { background: #0a8fb0; border-radius: 4px; position: relative; }
+.game b { position: absolute; left: 6px; right: 6px; bottom: 7px; height: 5px; border-radius: 3px; background: var(--sub); }
+h1 { margin: 0; font: 900 34px "Segoe UI Black", "Arial Black", system-ui, sans-serif; letter-spacing: -.5px; }
+.bar { width: 240px; height: 6px; border-radius: 3px; background: #221f2c; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 40%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--game)); animation: slide 1.3s ease-in-out infinite; }
+p { margin: 0; color: var(--muted); font-size: 15px; min-height: 1.4em; transition: opacity .3s; }
+@keyframes slide { 0% { transform: translateX(-110%); } 100% { transform: translateX(260%); } }
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) { .logo, .bar i { animation: none; } .bar i { width: 100%; opacity: .6; } }
+</style>
+</head>
+<body>
+<div class="box" role="status" aria-live="polite">
+  <div class="logo" aria-hidden="true"><div class="phone"><div class="cam"><i></i></div><div class="game"><b></b></div></div></div>
+  <h1>ClipMaker</h1>
+  <div class="bar" aria-hidden="true"><i></i></div>
+  <p id="msg">Starting up…</p>
+</div>
+<script>
+const URL_ = "http://127.0.0.1:7860/";
+const lines = ["Starting up…", "Loading the editor…", "Getting your clips ready…", "Warming up the subtitles…", "Almost there…"];
+let n = 0, t0 = Date.now();
+const msg = document.getElementById("msg");
+setInterval(() => {
+  const late = Date.now() - t0 > 60000;
+  msg.style.opacity = 0;
+  setTimeout(() => { msg.textContent = late ? "Taking longer than usual… hang tight." : lines[Math.min(++n, lines.length - 1)]; msg.style.opacity = 1; }, 300);
+}, 2200);
+function check() {
+  const img = new Image();
+  img.onload = () => { location.replace(URL_); };
+  img.onerror = () => setTimeout(check, 600);
+  img.src = URL_ + "favicon.ico?t=" + Date.now();
+}
+check();
+</script>
+</body>
+</html>

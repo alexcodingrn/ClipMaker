@@ -13,6 +13,26 @@ import uuid
 import webbrowser
 from pathlib import Path
 
+# Started from the icon: show the loading screen right away, before the heavy stuff loads.
+if __name__ == "__main__" and ("--launch" in sys.argv or "--open" in sys.argv):
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import window as _w
+    if _w.already_running():
+        try:
+            _ok = _w.focus_window()
+        except Exception:
+            _ok = False
+        if not _ok:
+            _w.open_window(f"http://127.0.0.1:{_w.PORT}")
+        raise SystemExit(0)
+    try:
+        _SPLASHED = _w.focus_window()      # an old ClipMaker window will reconnect by itself
+    except Exception:
+        _SPLASHED = False
+    if not _SPLASHED and (_w.APP_DIR / "loading.html").exists():
+        _w.open_window((_w.APP_DIR / "loading.html").as_uri())
+        _SPLASHED = True
+
 import uvicorn
 from fastapi import FastAPI, File, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
@@ -40,6 +60,7 @@ import engine  # noqa: E402
 from app import OUTPUT_DIR, VIDEO_EXTS, download_urls, load_settings, probe, save_settings  # noqa: E402
 import twitch_auto  # noqa: E402
 import updater  # noqa: E402
+from window import already_running, focus_window, open_window  # noqa: E402
 from twitch_auto import Watcher  # noqa: E402
 
 PORT = 7860
@@ -791,68 +812,10 @@ def _update_loop():
 
 
 # ------------------------------------------------------------------ start
-def open_window(url):
-    """Open ClipMaker in its own app window using a clean browser profile (no extensions),
-    so Chrome extensions can't interfere with video playback."""
-    import subprocess
-    profile = APP_DIR / "browser-profile"
-    candidates = []
-    for base in (os.environ.get("PROGRAMFILES", r"C:\Program Files"), os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"),
-                 os.environ.get("LOCALAPPDATA", "")):
-        if base:
-            candidates += [Path(base) / "Google/Chrome/Application/chrome.exe",
-                           Path(base) / "Microsoft/Edge/Application/msedge.exe"]
-    for exe in candidates:
-        if exe.exists():
-            try:
-                subprocess.Popen([str(exe), f"--app={url}", f"--user-data-dir={profile}", "--window-size=1500,950",
-                                  "--no-first-run", "--no-default-browser-check", "--disable-extensions"])
-                return
-            except Exception:
-                pass
-    webbrowser.open(url)
 
 
-def focus_window():
-    """If a ClipMaker window is already open, bring it to the front instead of opening another one."""
-    if os.name != "nt":
-        return False
-    import ctypes
-    from ctypes import wintypes
-    u = ctypes.windll.user32
-    found = []
-
-    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
-    def each(hwnd, _):
-        if not u.IsWindowVisible(hwnd):
-            return True
-        title = ctypes.create_unicode_buffer(256)
-        u.GetWindowTextW(hwnd, title, 256)
-        cls = ctypes.create_unicode_buffer(256)
-        u.GetClassNameW(hwnd, cls, 256)
-        if title.value.startswith("ClipMaker") and cls.value.startswith("Chrome_WidgetWin"):
-            found.append(hwnd)
-            return False
-        return True
-
-    u.EnumWindows(each, 0)
-    if not found:
-        return False
-    hwnd = found[0]
-    if u.IsIconic(hwnd):
-        u.ShowWindow(hwnd, 9)          # restore if minimized
-    else:
-        u.ShowWindow(hwnd, 5)
-    u.keybd_event(0x12, 0, 0, 0)       # tap Alt so Windows lets us bring it forward
-    u.keybd_event(0x12, 0, 2, 0)
-    u.SetForegroundWindow(hwnd)
-    return True
 
 
-def already_running():
-    with socket.socket() as sk:
-        sk.settimeout(0.5)
-        return sk.connect_ex(("127.0.0.1", PORT)) == 0
 
 
 class _QuietResets:
@@ -894,8 +857,9 @@ if __name__ == "__main__":
         shutil.rmtree(old, ignore_errors=True)
     print(f"\n  ClipMaker is running at {url}\n  Keep this window open - closing it turns ClipMaker off.\n")
     if "--launch" in sys.argv:
-        # started from the icon: open the window as soon as the server is up (unless one is already open)
-        threading.Timer(1.5, lambda: focus_window() or open_window(url)).start()
+        # started from the icon: the loading screen turns into ClipMaker by itself once we're up
+        if not globals().get("_SPLASHED"):
+            threading.Timer(1.5, lambda: focus_window() or open_window(url)).start()
     else:
         threading.Timer(9.5, lambda: open_window_if_needed(url)).start()
     threading.Thread(target=make_shortcuts, daemon=True).start()
