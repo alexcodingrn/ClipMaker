@@ -15,7 +15,7 @@ import requests
 APP_DIR = Path(__file__).resolve().parent
 CONF = APP_DIR / "update.json"
 KEEP = {"settings.json", "start.bat", "update.json", "downloaded.json"}   # never overwritten
-CODE_EXT = {".py", ".html", ".txt", ".ps1", ".json", ".md"}
+CODE_EXT = {".py", ".html", ".txt", ".ps1", ".json", ".md", ".ico"}
 state = {"checking": False, "latest": None, "error": None, "updating": False}
 
 

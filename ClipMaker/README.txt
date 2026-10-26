@@ -13,7 +13,7 @@ START IT (nothing to install)
 3. The first time it downloads what it needs (5-10 minutes). Leave it alone.
 4. ClipMaker opens in its own window. Keep the black window open (you can
    minimize it). Closing it turns ClipMaker off.
-Tip: right-click start.bat > Send to > Desktop (create shortcut) for an icon.
+Tip: ClipMaker puts a ClipMaker icon on your Desktop. Right-click it > Pin to taskbar.
 
 
 SETUP (about 3 minutes, ClipMaker walks you through it)

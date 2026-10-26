@@ -71,6 +71,39 @@ def list_clips():
 
 
 # ------------------------------------------------------------------ pages
+@app.get("/favicon.ico")
+def favicon():
+    return FileResponse(APP_DIR / "clipmaker.ico", media_type="image/x-icon")
+
+
+def make_shortcuts():
+    """Windows: a real ClipMaker shortcut (own icon, black window starts minimized) on the Desktop
+    and in the Start menu, so it can be pinned to the taskbar."""
+    if os.name != "nt" or not (APP_DIR / "clipmaker.ico").exists():
+        return
+    import subprocess
+    ps = r"""
+$sh = New-Object -ComObject WScript.Shell
+$app = '%s'
+foreach ($dir in @([Environment]::GetFolderPath('Desktop'), (Join-Path ([Environment]::GetFolderPath('Programs')) ''))) {
+  $lnk = Join-Path $dir 'ClipMaker.lnk'
+  $s = $sh.CreateShortcut($lnk)
+  $s.TargetPath = "$env:WINDIR\System32\cmd.exe"
+  $s.Arguments = '/c "' + (Join-Path $app 'start.bat') + '"'
+  $s.WorkingDirectory = $app
+  $s.IconLocation = (Join-Path $app 'clipmaker.ico') + ',0'
+  $s.WindowStyle = 7
+  $s.Description = 'ClipMaker'
+  $s.Save()
+}
+""" % str(APP_DIR).replace("'", "''")
+    try:
+        subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+                       timeout=30, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except Exception:
+        pass
+
+
 @app.get("/")
 def index():
     return HTMLResponse((APP_DIR / "ui.html").read_text(encoding="utf-8"),
@@ -773,6 +806,7 @@ if __name__ == "__main__":
         shutil.rmtree(old, ignore_errors=True)
     print(f"\n  ClipMaker is running at {url}\n  Keep this window open - closing it turns ClipMaker off.\n")
     threading.Timer(9.5, lambda: open_window_if_needed(url)).start()
+    threading.Thread(target=make_shortcuts, daemon=True).start()
     threading.Thread(target=_update_loop, daemon=True).start()
     if ai.installed():
         threading.Thread(target=ai.start, daemon=True).start()
