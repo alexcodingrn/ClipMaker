@@ -11,8 +11,10 @@ START IT (nothing to install)
 2. Double-click start.bat. If Windows says "Windows protected your PC",
    click More info > Run anyway.
 3. The first time it downloads what it needs (5-10 minutes). Leave it alone.
-4. ClipMaker opens in its own window. Keep the black window open (you can
-   minimize it). Closing it turns ClipMaker off.
+4. ClipMaker opens in its own window. After the first time there's no black
+   window: it runs quietly in the background, even when you close the window,
+   so your Twitch clips keep coming in. The Quit button (top right) turns it
+   fully off.
 Tip: ClipMaker puts a ClipMaker icon on your Desktop. Right-click it > Pin to taskbar.
 
 
