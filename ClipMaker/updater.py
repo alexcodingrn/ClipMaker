@@ -44,7 +44,7 @@ def check():
         return
     state.update(checking=True, error=None)
     try:
-        r = requests.get(_raw(c, "VERSION"), timeout=15, headers={"Cache-Control": "no-cache"})
+        r = requests.get(_raw(c, "ClipMaker/VERSION"), timeout=15, headers={"Cache-Control": "no-cache"})
         r.raise_for_status()
         state["latest"] = int(r.text.strip())
     except Exception as e:
