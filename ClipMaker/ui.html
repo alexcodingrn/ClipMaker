@@ -179,6 +179,7 @@ button.danger.sure { background: #c62828; border-color: #c62828; color: #fff; }
       <button type="button" data-view="twitch" aria-selected="false">Auto from Twitch</button>
       <button type="button" data-view="done" aria-selected="false">Finished clips</button>
       <button type="button" id="setupBtn" title="Step-by-step setup">⚙ Setup</button>
+      <button type="button" id="quitBtn" title="Turn ClipMaker fully off">⏻ Quit</button>
     </nav>
   </header>
 
@@ -1181,6 +1182,21 @@ function drawSetup() {
       box.appendChild(b); }
   }
 }
+
+// ---------------- quit (ClipMaker keeps running in the background when the window closes) ----------------
+let quitArmed = null;
+$("quitBtn").onclick = async () => {
+  if (!quitArmed) {
+    $("quitBtn").textContent = "Click again to quit"; $("quitBtn").classList.add("primary");
+    quitArmed = setTimeout(() => { quitArmed = null; $("quitBtn").textContent = "⏻ Quit"; $("quitBtn").classList.remove("primary"); }, 4000);
+    return;
+  }
+  clearTimeout(quitArmed); quiting = true;
+  try { await api("/api/quit", {}); } catch (e) {}
+  document.body.innerHTML = '<div style="display:grid;place-items:center;height:100vh;font:600 20px var(--body);color:var(--muted);text-align:center">ClipMaker is off.<br><span style="font-weight:400;font-size:15px">Click the pink ClipMaker icon to open it again.</span></div>';
+  setTimeout(() => window.close(), 1200);
+};
+let quiting = false;
 
 // ---------------- one-click updates ----------------
 async function checkUpdate() {

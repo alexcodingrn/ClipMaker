@@ -26,7 +26,7 @@ SETUP HELP (answer setup questions with these steps, keep it short, and open the
 - Webcam in the wrong spot: drag the pink box's "Webcam" tag to move it and a corner to resize. It's remembered for next time.
 - Downloading a finished clip: Finished clips tab > Download. It goes to the Downloads folder.
 - Own sounds/memes: Sounds & memes tab > add files.
-- ClipMaker must stay open (the black window can be minimized) for auto clips to work.
+- ClipMaker runs quietly in the background, even after closing its window, so auto clips keep working. The Quit button (top right) turns it fully off. To open it again, click the pink ClipMaker icon.
 
 Rules:
 - ONLY do what the user asked for. Never add a hook, caption, effect or setting they didn't ask for.

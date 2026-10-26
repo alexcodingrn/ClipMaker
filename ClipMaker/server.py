@@ -20,6 +20,21 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 APP_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(APP_DIR))
 
+# Running quietly in the background (pythonw, no black window): keep a log file instead,
+# and never let ffmpeg or other helpers pop up their own black windows.
+if sys.stdout is None or sys.stderr is None:
+    _log = open(APP_DIR / "clipmaker.log", "a", encoding="utf-8", buffering=1)
+    sys.stdout = sys.stderr = _log
+if os.name == "nt":
+    import subprocess as _sp
+    _orig_popen_init = _sp.Popen.__init__
+
+    def _quiet_popen_init(self, *a, **kw):
+        if not kw.get("creationflags"):
+            kw["creationflags"] = 0x08000000   # CREATE_NO_WINDOW
+        _orig_popen_init(self, *a, **kw)
+    _sp.Popen.__init__ = _quiet_popen_init
+
 import ai  # noqa: E402
 import engine  # noqa: E402
 from app import OUTPUT_DIR, VIDEO_EXTS, download_urls, load_settings, probe, save_settings  # noqa: E402
@@ -79,20 +94,23 @@ def favicon():
 def make_shortcuts():
     """Windows: a real ClipMaker shortcut (own icon, black window starts minimized) on the Desktop
     and in the Start menu, so it can be pinned to the taskbar."""
-    if os.name != "nt" or not (APP_DIR / "clipmaker.ico").exists():
+    if os.name != "nt" or not (APP_DIR / "clipmaker.ico").exists() or not (APP_DIR / "ClipMaker.vbs").exists():
         return
     import subprocess
     ps = r"""
 $sh = New-Object -ComObject WScript.Shell
 $app = '%s'
-foreach ($dir in @([Environment]::GetFolderPath('Desktop'), (Join-Path ([Environment]::GetFolderPath('Programs')) ''))) {
+$pinned = Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar'
+$spots = @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs'))
+if (Test-Path (Join-Path $pinned 'ClipMaker.lnk')) { $spots += $pinned }
+foreach ($dir in $spots) {
   $lnk = Join-Path $dir 'ClipMaker.lnk'
   $s = $sh.CreateShortcut($lnk)
-  $s.TargetPath = "$env:WINDIR\System32\cmd.exe"
-  $s.Arguments = '/c "' + (Join-Path $app 'start.bat') + '"'
+  $s.TargetPath = "$env:WINDIR\System32\wscript.exe"
+  $s.Arguments = '"' + (Join-Path $app 'ClipMaker.vbs') + '"'
   $s.WorkingDirectory = $app
   $s.IconLocation = (Join-Path $app 'clipmaker.ico') + ',0'
-  $s.WindowStyle = 7
+  $s.WindowStyle = 1
   $s.Description = 'ClipMaker'
   $s.Save()
 }
@@ -719,6 +737,23 @@ def twitch_debug():
         return err(str(e)[:300], 500)
 
 
+@app.post("/api/quit")
+def quit_app():
+    """Turn ClipMaker fully off (it runs in the background, so closing the window doesn't)."""
+    def bye():
+        try:
+            watcher.stop()
+        except Exception:
+            pass
+        try:
+            ai.stop()
+        except Exception:
+            pass
+        os._exit(0)
+    threading.Timer(0.8, bye).start()
+    return {"ok": True}
+
+
 @app.get("/api/twitch/status")
 def twitch_status():
     running = bool(watcher.thread and watcher.thread.is_alive())
@@ -731,14 +766,21 @@ def update_status():
     return updater.status()
 
 
+def _restart():
+    import subprocess
+    exe = Path(sys.executable)
+    quiet = exe.with_name("pythonw.exe")
+    subprocess.Popen([str(quiet if quiet.exists() else exe), str(APP_DIR / "server.py"), "--after-update"], cwd=str(APP_DIR))
+    os._exit(0)
+
+
 @app.post("/api/update")
 def update_apply():
     try:
         updater.apply()
     except Exception as e:
         return err("The update didn't download. Check your internet and try again. (" + str(e)[:120] + ")", 500)
-    # exit code 42 tells start.bat to start ClipMaker again in the same window
-    threading.Timer(1.0, lambda: os._exit(42)).start()
+    threading.Timer(1.0, _restart).start()   # the new version starts itself and the window reconnects
     return {"ok": True}
 
 
@@ -825,6 +867,11 @@ if __name__ == "__main__":
     import logging
     logging.getLogger("asyncio").addFilter(_QuietResets())
     url = f"http://127.0.0.1:{PORT}"
+    if "--after-update" in sys.argv:
+        for _ in range(60):          # wait for the old version to let go
+            if not already_running():
+                break
+            time.sleep(0.5)
     if "--open" in sys.argv or already_running():
         try:
             focused = focus_window()
@@ -846,7 +893,11 @@ if __name__ == "__main__":
                 pass
         shutil.rmtree(old, ignore_errors=True)
     print(f"\n  ClipMaker is running at {url}\n  Keep this window open - closing it turns ClipMaker off.\n")
-    threading.Timer(9.5, lambda: open_window_if_needed(url)).start()
+    if "--launch" in sys.argv:
+        # started from the icon: open the window as soon as the server is up (unless one is already open)
+        threading.Timer(1.5, lambda: focus_window() or open_window(url)).start()
+    else:
+        threading.Timer(9.5, lambda: open_window_if_needed(url)).start()
     threading.Thread(target=make_shortcuts, daemon=True).start()
     threading.Thread(target=_update_loop, daemon=True).start()
     if ai.installed():

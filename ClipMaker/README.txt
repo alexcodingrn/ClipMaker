@@ -33,7 +33,8 @@ time with the "Setup" button at the top. Or click "Ask AI" and ask
 EVERY STREAM
 ------------
 - Keep your Stream Deck clip button exactly how it is.
-- Open ClipMaker before you go live and leave it open.
+- Open ClipMaker before you go live (click the pink icon). Closing the
+  window is fine, it keeps running until you press Quit or restart the PC.
 - After stream your clips show up in Make clips with a purple dot (new clips
   can take a few minutes to show up on Twitch's side).
 - First clip only: make sure the pink box is on your webcam. Drag the

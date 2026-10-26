@@ -23,14 +23,18 @@ if not exist "runtime\ready.txt" (
   pause
   exit /b 1
 )
+if exist "runtime\pythonw.exe" (
+  rem run quietly in the background, no black window
+  start "" "runtime\pythonw.exe" server.py --launch
+  exit /b 0
+)
+echo.
 echo.
 powershell -NoProfile -Command "try{(New-Object Net.Sockets.TcpClient).Connect('127.0.0.1',7860);exit 0}catch{exit 1}" >nul 2>nul && ( "runtime\python.exe" server.py --open & exit /b 0 )
 echo  ClipMaker is running. Your browser will open in a moment.
 echo  Keep this window open - closing it turns ClipMaker off.
 echo.
-:run
 "runtime\python.exe" server.py
-if "%errorlevel%"=="42" ( echo  Updated! Starting the new version... & goto run )
 echo.
 echo  ClipMaker stopped. If you see an error above, screenshot it and send it to Claude.
 pause
